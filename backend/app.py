@@ -3,10 +3,11 @@ import fastapi
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware  # Для CORS
-from DTO.LessonDTO import LessonDTO
+from Controllers import auth, schedule
 
 app = FastAPI()
 
+app.include_router(schedule.router)
 # Разрешить запросы от Vue (иначе будет CORS-ошибка)
 app.add_middleware(
     CORSMiddleware,
@@ -16,8 +17,6 @@ app.add_middleware(
 )
 
 
-@app.post("/add_lesson")
-async def post_lesson(request: Request):
-    json_data = await request.json()
-    Lesson = LessonDTO(json_data)
-    return {"received_json": Lesson}
+@app.get("/")
+async def root():
+    return {"message": "Main page"}

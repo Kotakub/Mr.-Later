@@ -1,0 +1,17 @@
+{
+    "dbcode.connections": [
+        {
+            "connectionId": "gGgtbibKVJHEoTuR2wqRB",
+            "name": "Kursach",
+            "driver": "sqlite",
+            "socket": "Mr.-Later/my_database.db",
+            "readOnly": false,
+            "driverOptions": {
+                "extensions": [
+                    "sqlite-vec"
+                ]
+            },
+            "connectionType": "socket"
+        }
+    ]
+}
