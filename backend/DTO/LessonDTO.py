@@ -16,13 +16,15 @@ class LessonDTO:
         endTime = [int(x) for x in (lesson_data["endTime"]).split(":")]
 
         # Добавление атрибутов класса
-        self.lesson_id = lesson_data["lesson_id"]
+        self.lesson_id = lesson_data["id"]
         self.subject_name = lesson_data["subject_name"]
         self.teacher_name = lesson_data["teacher_name"]
         self.startDate = date(startDate[0], startDate[1], startDate[2])
         self.endDate = date(endDate[0], endDate[1], endDate[2])
         self.startTime = time(startTime[0], startTime[1])
         self.endTime = time(endTime[0], endTime[1])
+        self.dayOfWeek = lesson_data["dayOfWeek"]
+        self.repeat = lesson_data["repeat"]
 
     # Строковый вывод
     def __str__(self):
