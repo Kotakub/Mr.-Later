@@ -6,17 +6,17 @@ from datetime import date, time
 from typing import List, Dict, Any
 from DTO.LessonDTO import LessonDTO
 
-db_path = os.path.join(os.path.dirname(__file__), "..", "..", "my_database.db")
-
 
 class LessonRepository:
-    def __init__(self, db_path: str = db_path):
-        self.db_path = db_path
+    def __init__(self):
+
+        self.db_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../my_database.db")
+        )
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Получить все уроки из базы данных"""
         lessons = []
-
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row  # Для доступа к полям по имени
             cursor = conn.cursor()
@@ -24,9 +24,9 @@ class LessonRepository:
             cursor.execute(
                 """
                 SELECT 
-                    id, schedule_id, subject_name, 
+                    id, schedule_id , teacher_name, subject_name, 
                     startDate, endDate, startTime, endTime, 
-                    repeat, dayOfWeek, teacher_name
+                    repeat, dayOfWeek
                 FROM lesson
             """
             )
