@@ -18,7 +18,7 @@ async def post_lesson(request: Request):
     return {"received_json": Lesson}
 
 
-@router.get("/")
+@router.get("/get_schedule")
 async def get_schedule(request: Request):
     lessonRepository = LessonRepository()
     data = lessonRepository.get_all()
