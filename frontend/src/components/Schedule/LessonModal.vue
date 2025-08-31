@@ -7,82 +7,93 @@
         </svg>
       </button>
       
-      <h2>{{ lesson?.subject_name }}</h2>
+      <h2>Редактирование занятия</h2>
+      <p class="modal-subtitle">Дата: {{ formattedDate }}</p>
       
-      <div class="modal-details">
-        <div class="detail-row">
-          <span class="detail-label">Дата:</span>
-          <span class="detail-value">{{ formattedDate }}</span>
-        </div>
-        
-        <div class="detail-row">
-          <span class="detail-label">Преподаватель:</span>
-          <span class="detail-value">{{ lesson?.teacher_name }}</span>
-        </div>
-        
-        <div class="detail-row">
-          <span class="detail-label">Аудитория:</span>
-          <span class="detail-value">{{ lesson?.room }}</span>
-        </div>
-        
-        <div class="detail-row">
-          <span class="detail-label">Дни проведения:</span>
-          <span class="detail-value">
-            {{ lesson?.dates.join(', ') }}
-          </span>
-        </div>
-        
-        <div class="detail-row full-width">
-          <span class="detail-label">Описание:</span>
-          <span class="detail-value">
-            {{ description }}
-          </span>
-        </div>
+      <div class="form-group">
+        <label class="span-input">Название предмета:</label>
+        <input 
+          v-model="editedLesson.subject_name" 
+          type="text" 
+          placeholder="Введите название предмета"
+          class="registr-input"
+        >
+      </div>
 
-        <!-- Блок комментариев -->
-        <div class="detail-row full-width" v-if="comments.length > 0">
-          <span class="detail-label">Комментарии:</span>
-          <div class="comments-section">
-            <div 
-              v-for="(comment, index) in comments" 
-              :key="index"
-              class="comment-item"
-            >
-              {{ comment.comment }}
-            </div>
-          </div>
-        </div>
+      <div class="form-group">
+        <label class="span-input">Преподаватель:</label>
+        <input 
+          v-model="editedLesson.teacher_name" 
+          type="text" 
+          placeholder="Введите ФИО преподавателя"
+          class="registr-input"
+        >
+      </div>
 
-        <!-- Форма добавления комментария -->
-        <div class="detail-row full-width">
-          <span class="detail-label">Добавить комментарий:</span>
-          <div class="comment-form">
-            <textarea 
-              v-model="newComment" 
-              placeholder="Введите ваш комментарий..."
-              class="comment-textarea"
-              rows="3"
-            ></textarea>
-            <button 
-              @click="addNewComment" 
-              class="submit-button small"
-              :disabled="!newComment.trim()"
-            >
-              Добавить
-            </button>
+      <div class="form-group">
+        <label class="span-input">Место проведения:</label>
+        <input 
+          v-model="editedLesson.room" 
+          type="text" 
+          placeholder="Введите место проведения"
+          class="registr-input"
+        >
+      </div>
+
+      <div class="form-group time-group">
+        <label class="span-input">Время проведения:</label>
+        <div class="time-inputs">
+          <input 
+            v-model="editedLesson.start_time" 
+            type="time" 
+            class="registr-input time-input"
+          >
+          <span class="time-separator">—</span>
+          <input 
+            v-model="editedLesson.end_time" 
+            type="time" 
+            class="registr-input time-input"
+          >
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="span-input">Описание занятия:</label>
+        <textarea 
+          v-model="editedLesson.description" 
+          placeholder="Введите описание занятия..."
+          class="registr-input textarea"
+          rows="4"
+        ></textarea>
+      </div>
+
+      <!-- Блок комментариев -->
+      <div class="form-group" v-if="comments.length > 0">
+        <label class="span-input">Комментарии:</label>
+        <div class="comments-section">
+          <div 
+            v-for="(comment, index) in comments" 
+            :key="index"
+            class="comment-item"
+          >
+            <strong>{{ formatCommentDate(comment.date) }}:</strong> {{ comment.comment }}
           </div>
         </div>
       </div>
 
       <div class="modal-actions">
-        <button class="action-button secondary" @click="$emit('close')">
-          Закрыть
-        </button>
         <button class="action-button danger" @click="$emit('delete')">
           Удалить
         </button>
-        <button class="action-button primary" @click="$emit('add-to-calendar')">
-          Добавить в календарь
+        <button class="action-button secondary" @click="$emit('close')">
+          Отмена
+        </button>
+        <button 
+          class="submit-button" 
+          @click="saveChanges"
+          :disabled="!isFormValid"
+        >
+          Сохранить
         </button>
       </div>
     </div>
@@ -90,19 +101,38 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { formatDate, formatDateYMD } from '../../utils/dateUtils';
+import { reactive, computed, watch } from 'vue';
+import { formatDate } from '../../utils/dateUtils';
 
 const props = defineProps({
   lesson: Object,
   date: Date,
-  comments: Array,
-  subjectDescriptions: Object
+  comments: Array
 });
 
-const emit = defineEmits(['close', 'delete', 'add-to-calendar', 'add-comment']);
+const emit = defineEmits(['close', 'delete', 'save']);
 
-const newComment = ref('');
+const editedLesson = reactive({
+  subject_name: '',
+  teacher_name: '',
+  room: '',
+  start_time: '09:00',
+  end_time: '10:30',
+});
+
+// Инициализация формы при открытии модального окна
+watch(() => props.lesson, (newLesson) => {
+  if (newLesson) {
+    Object.assign(editedLesson, {
+      subject_name: newLesson.subject_name || '',
+      teacher_name: newLesson.teacher_name || '',
+      room: newLesson.room || '',
+      start_time: newLesson.start_time || '09:00',
+      end_time: newLesson.end_time || '10:30',
+      description: newLesson.description || ''
+    });
+  }
+}, { immediate: true });
 
 const formattedDate = computed(() => {
   return props.date ? formatDate(props.date, { 
@@ -113,33 +143,32 @@ const formattedDate = computed(() => {
   }) : '';
 });
 
-const description = computed(() => {
-  return props.subjectDescriptions?.[props.lesson?.subject_name] || 
-         'Описание предмета отсутствует.';
-});
-
-// Добавление нового комментария
-const addNewComment = () => {
-  if (!newComment.value.trim() || !props.lesson || !props.date) return;
-  
-  const commentData = {
-    lesson_id: generateLessonId(props.lesson, formatDateYMD(props.date)),
-    date: formatDateYMD(props.date),
-    comment: newComment.value.trim()
-  };
-  
-  emit('add-comment', commentData);
-  newComment.value = '';
+const formatCommentDate = (dateStr) => {
+  const date = new Date(dateStr);
+  return formatDate(date, { 
+    day: 'numeric', 
+    month: 'long'
+  });
 };
 
-// Генерация ID для занятия
-const generateLessonId = (lesson, dateStr) => {
-  return `${lesson.subject_name}-${lesson.teacher_name}-${lesson.room}-${dateStr}`.hashCode();
+const isFormValid = computed(() => {
+  return editedLesson.subject_name.trim() && 
+         editedLesson.teacher_name.trim() && 
+         editedLesson.room.trim() &&
+         editedLesson.start_time &&
+         editedLesson.end_time;
+});
+
+// Сохранение изменений
+const saveChanges = () => {
+  if (!isFormValid.value) return;
+  
+  emit('save', editedLesson);
 };
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
 
 .modal-overlay {
   position: fixed;
@@ -153,7 +182,7 @@ const generateLessonId = (lesson, dateStr) => {
   align-items: center;
   z-index: 1000;
   padding: 20px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
 }
 
 .modal-content {
@@ -193,36 +222,51 @@ const generateLessonId = (lesson, dateStr) => {
   font-weight: 700;
 }
 
-.modal-details {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  margin-bottom: 25px;
-}
-
-.detail-row {
-  display: flex;
-  align-items: flex-start;
-}
-
-.detail-row.full-width {
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-label {
-  font-weight: 600;
-  color: #4a2d7c;
-  min-width: 120px;
-  flex-shrink: 0;
-  font-size: 16px;
-}
-
-.detail-value {
+.modal-subtitle {
   color: #5d4b7a;
-  flex: 1;
-  font-size: 15px;
-  line-height: 1.4;
+  margin-bottom: 25px;
+  font-size: 16px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.span-input {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #4a2d7c;
+  font-weight: 600;
+  display: block;
+}
+
+.registr-input {
+  padding: 12px 15px;
+  width: 100%;
+  border: 2px solid #9f8cb9;
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: "Chiron GoRound TC", sans-serif;
+  transition: border-color 0.3s;
+  background: white;
+  color: #333;
+}
+
+.registr-input:focus {
+  outline: none;
+  border-color: #4a2d7c;
+}
+
+.registr-input::placeholder {
+  color: #aaa;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: "Chiron GoRound TC", sans-serif;
 }
 
 /* Стили для комментариев */
@@ -232,38 +276,45 @@ const generateLessonId = (lesson, dateStr) => {
 
 .comment-item {
   padding: 12px;
-  margin-bottom: 8px;
   background: rgba(255, 255, 255, 0.8);
   border-radius: 8px;
+  margin-bottom: 8px;
   border-left: 3px solid #ffa726;
   font-size: 14px;
   color: #5d4b7a;
 }
 
-.comment-form {
-  margin-top: 10px;
+.comment-item:last-child {
+  margin-bottom: 0;
 }
 
-.comment-textarea {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #9f8cb9;
-  border-radius: 8px;
-  font-family: "Stick", sans-serif;
-  font-size: 14px;
-  resize: vertical;
-  margin-bottom: 10px;
+/* Стили для времени */
+.time-group {
+  margin-bottom: 25px;
 }
 
-.comment-textarea:focus {
-  outline: none;
-  border-color: #4a2d7c;
+.time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-input {
+  flex: 1;
+  text-align: center;
+}
+
+.time-separator {
+  color: #5d4b7a;
+  font-weight: 600;
+  font-size: 18px;
 }
 
 .modal-actions {
   display: flex;
   gap: 12px;
-  justify-content: flex-end;
+  justify-content: space-between;
+  margin-top: 25px;
 }
 
 .action-button {
@@ -272,18 +323,10 @@ const generateLessonId = (lesson, dateStr) => {
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   font-weight: 600;
   transition: all 0.3s;
-}
-
-.action-button.primary {
-  background: #4a2d7c;
-  color: white;
-}
-
-.action-button.primary:hover {
-  background: #3a225f;
+  flex: 1;
 }
 
 .action-button.secondary {
@@ -305,24 +348,25 @@ const generateLessonId = (lesson, dateStr) => {
   background: #ff3742;
 }
 
-.submit-button.small {
-  padding: 8px 16px;
-  font-size: 14px;
+.submit-button {
   background-color: #4a2d7c;
   color: white;
   border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: "Stick", sans-serif;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
+  font-family: "Chiron GoRound TC", sans-serif;
+  cursor: pointer;
   transition: background-color 0.3s;
+  flex: 1;
 }
 
-.submit-button.small:hover:not(:disabled) {
+.submit-button:hover:not(:disabled) {
   background-color: #3a225f;
 }
 
-.submit-button.small:disabled {
+.submit-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -337,18 +381,17 @@ const generateLessonId = (lesson, dateStr) => {
     flex-direction: column;
   }
 
-  .action-button {
+  .action-button, .submit-button {
     width: 100%;
-    text-align: center;
   }
 
-  .detail-row {
+  .time-inputs {
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
   }
 
-  .detail-label {
-    min-width: auto;
+  .time-separator {
+    margin: 5px 0;
   }
   
   .modal-content h2 {

@@ -11,12 +11,12 @@
       <p class="modal-subtitle">Дата: {{ formattedDate }}</p>
       
       <div class="form-group">
-        <label for="subjectName" class="span-input">Название предмета:</label>
+        <label for="subjectName" class="span-input">Название занятия:</label>
         <input 
           id="subjectName"
           v-model="newLesson.subject_name" 
           type="text" 
-          placeholder="Введите название предмета"
+          placeholder="Введите название занятия"
           class="registr-input"
         >
       </div>
@@ -33,40 +33,40 @@
       </div>
 
       <div class="form-group">
-        <label for="room" class="span-input">Аудитория:</label>
+        <label for="room" class="span-input">Место проведения:</label>
         <input 
           id="room"
           v-model="newLesson.room" 
           type="text" 
-          placeholder="Введите номер аудитории"
+          placeholder="Введите место проведения"
           class="registr-input"
         >
       </div>
 
-      <div class="form-group">
-        <label class="span-input">Повторять занятие:</label>
-        <div class="repeat-options">
-          <label class="checkbox-label">
-            <input 
-              type="checkbox" 
-              v-model="newLesson.repeatWeekly"
-              @change="updateRepeatDates"
-            >
-            Каждую неделю в этот же день
-          </label>
+      <div class="form-group time-group">
+        <label class="span-input">Время проведения:</label>
+        <div class="time-inputs">
+          <input 
+            v-model="newLesson.start_time" 
+            type="time" 
+            class="registr-input time-input"
+          >
+          <span class="time-separator">—</span>
+          <input 
+            v-model="newLesson.end_time" 
+            type="time" 
+            class="registr-input time-input"
+          >
         </div>
       </div>
 
-      <div class="form-group" v-if="newLesson.repeatWeekly">
-        <label class="span-input">Количество недель:</label>
-        <input 
-          v-model="newLesson.weeksCount" 
-          type="number" 
-          min="1" 
-          max="12"
-          class="registr-input"
-          @change="updateRepeatDates"
-        >
+      <div class="form-group">
+        <label class="span-input">Повторение занятия:</label>
+        <select v-model="newLesson.repeat" class="registr-input">
+          <option value="none">Не повторять</option>
+          <option value="weekly">Каждую неделю</option>
+          <option value="biweekly">Каждые 2 недели</option>
+        </select>
       </div>
 
       <div class="modal-actions">
@@ -86,7 +86,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { formatDate, formatDateYMD } from '../../utils/dateUtils';
 
 const props = defineProps({
@@ -99,8 +99,10 @@ const newLesson = reactive({
   subject_name: '',
   teacher_name: '',
   room: '',
-  repeatWeekly: false,
-  weeksCount: 4,
+  start_time: '09:00',
+  end_time: '10:30',
+  repeat: 'none',
+  comment: '',
   dates: []
 });
 
@@ -116,25 +118,10 @@ const formattedDate = computed(() => {
 const isFormValid = computed(() => {
   return newLesson.subject_name.trim() && 
          newLesson.teacher_name.trim() && 
-         newLesson.room.trim();
+         newLesson.room.trim() &&
+         newLesson.start_time &&
+         newLesson.end_time;
 });
-
-// Обновление дат повторения
-const updateRepeatDates = () => {
-  if (!props.date) return;
-  
-  const dates = [formatDateYMD(props.date)];
-  
-  if (newLesson.repeatWeekly) {
-    for (let i = 1; i < newLesson.weeksCount; i++) {
-      const nextDate = new Date(props.date);
-      nextDate.setDate(nextDate.getDate() + (i * 7));
-      dates.push(formatDateYMD(nextDate));
-    }
-  }
-  
-  newLesson.dates = dates;
-};
 
 // Сохранение занятия
 const saveLesson = () => {
@@ -144,22 +131,29 @@ const saveLesson = () => {
     subject_name: newLesson.subject_name,
     teacher_name: newLesson.teacher_name,
     room: newLesson.room,
-    dates: newLesson.dates
+    start_time: newLesson.start_time,
+    end_time: newLesson.end_time,
+    repeat: newLesson.repeat,
+    comment: newLesson.comment,
+    dates: [formatDateYMD(props.date)]
   };
+  
+  // Добавляем повторяющиеся даты если нужно
+  if (newLesson.repeat !== 'none') {
+    const weeks = newLesson.repeat === 'weekly' ? 1 : 2;
+    for (let i = 1; i <= 4; i++) { // 4 повторения
+      const nextDate = new Date(props.date);
+      nextDate.setDate(nextDate.getDate() + (i * 7 * weeks));
+      lessonData.dates.push(formatDateYMD(nextDate));
+    }
+  }
   
   emit('save', lessonData);
 };
-
-// Сброс формы при изменении даты
-watch(() => props.date, () => {
-  if (props.date) {
-    updateRepeatDates();
-  }
-}, { immediate: true });
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
 
 .modal-overlay {
   position: fixed;
@@ -173,7 +167,7 @@ watch(() => props.date, () => {
   align-items: center;
   z-index: 1000;
   padding: 20px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
 }
 
 .modal-content {
@@ -239,7 +233,7 @@ watch(() => props.date, () => {
   border: 2px solid #9f8cb9;
   border-radius: 8px;
   font-size: 16px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   transition: border-color 0.3s;
   background: white;
   color: #333;
@@ -250,27 +244,31 @@ watch(() => props.date, () => {
   border-color: #4a2d7c;
 }
 
-.registr-input::placeholder {
-  color: #aaa;
+.textarea {
+  resize: vertical;
+  min-height: 80px;
 }
 
-.repeat-options {
-  margin-top: 10px;
+/* Стили для времени */
+.time-group {
+  margin-bottom: 25px;
 }
 
-.checkbox-label {
+.time-inputs {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: normal;
-  cursor: pointer;
-  color: #5d4b7a;
-  font-size: 14px;
+  gap: 10px;
 }
 
-.checkbox-label input[type="checkbox"] {
-  width: auto;
-  transform: scale(1.2);
+.time-input {
+  flex: 1;
+  text-align: center;
+}
+
+.time-separator {
+  color: #5d4b7a;
+  font-weight: 600;
+  font-size: 18px;
 }
 
 .modal-actions {
@@ -286,7 +284,7 @@ watch(() => props.date, () => {
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   font-weight: 600;
   transition: all 0.3s;
   background: white;
@@ -306,7 +304,7 @@ watch(() => props.date, () => {
   border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   cursor: pointer;
   transition: background-color 0.3s;
 }
@@ -341,6 +339,15 @@ watch(() => props.date, () => {
   
   .modal-subtitle {
     font-size: 14px;
+  }
+
+  .time-inputs {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .time-separator {
+    margin: 5px 0;
   }
 }
 </style>

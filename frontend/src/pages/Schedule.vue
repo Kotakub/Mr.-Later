@@ -17,15 +17,16 @@
         :items="getScheduleForDate(prevDate)"
         day-type="prev-day"
         :clickable="true"
+        :show-add-button="false"
         @day-click="changeDay(-1)"
         @item-click="openModal($event, prevDate)"
-        @add-click="openAddLessonModal(prevDate)"
       />
 
       <ScheduleDay
         :title="formatDate(currentDate)"
         :items="getScheduleForDate(currentDate)"
         day-type="current-day"
+        :show-add-button="true"
         @item-click="openModal($event, currentDate)"
         @add-click="openAddLessonModal(currentDate)"
       />
@@ -35,9 +36,9 @@
         :items="getScheduleForDate(nextDate)"
         day-type="next-day"
         :clickable="true"
+        :show-add-button="false"
         @day-click="changeDay(1)"
         @item-click="openModal($event, nextDate)"
-        @add-click="openAddLessonModal(nextDate)"
       />
     </div>
 
@@ -45,19 +46,17 @@
       v-if="isModalOpen"
       :lesson="selectedItem"
       :date="selectedDate"
-      :comments="getCommentsForLesson(selectedItem, selectedDate)"
-      :subject-descriptions="subjectDescriptions"
+      :comments="getCommentsForLesson(selectedItem)"
       @close="closeModal"
       @delete="deleteLesson"
-      @add-to-calendar="addToCalendar"
-      @add-comment="addComment"
+      @save="updateLesson"
     />
 
     <AddLessonModal
       v-if="isAddModalOpen"
       :date="addLessonDate"
       @close="closeAddModal"
-      @save="saveNewLesson"
+      @save="addNewLesson"
     />
   </div>
 </template>
@@ -83,63 +82,55 @@ const selectedItem = ref(null);
 const selectedDate = ref(null);
 const addLessonDate = ref(null);
 
-// Данные расписания с комментариями
+// Данные расписания с lesson_id и comments
 const schedule = ref({
   "monday": [
     {
+      'lesson_id': 0,
       'dates': ['2025-08-01','2025-08-08'],
       'subject_name': 'Математика',
       'teacher_name': 'Иванов И.И.',
-      'room': '101'
+      'room': '101',
+      'start_time': '09:00',
+      'end_time': '10:30',
+      'description': 'Изучение алгебры и геометрии'
     }
   ],
   "tuesday": [
     {
+      'lesson_id': 1,
       'dates': ['2025-08-02','2025-08-09'],
       'subject_name': 'Физика',
       'teacher_name': 'Петров П.П.',
-      'room': '202'
+      'room': '202',
+      'start_time': '11:00',
+      'end_time': '12:30',
+      'description': 'Механика и термодинамика'
     },
     {
-      'dates': ['2025-08-23','2025-08-10'],
+      'lesson_id': 2,
+      'dates': ['2025-08-03','2025-08-10'],
       'subject_name': 'Химия',
       'teacher_name': 'Сидоров С.С.',
-      'room': '303'
+      'room': '303',
+      'start_time': '14:00',
+      'end_time': '15:30',
+      'description': 'Органическая химия'
     }
   ],
   "wednesday": [],
   "thursday": [],
   "friday": [],
-  "saturday": [
-    {
-      'dates': ['2025-08-02','2025-08-09'],
-      'subject_name': 'Физика',
-      'teacher_name': 'Петров П.П.',
-      'room': '202'
-    },
-    {
-      'dates': ['2025-08-23','2025-08-10'],
-      'subject_name': 'Химия',
-      'teacher_name': 'Сидоров С.С.',
-      'room': '303'
-    }
-  ],
+  "saturday": [],
   "sunday": [],
   "comments": [
     {
-      'lesson_id': 0,
-      'date': '2025-08-23',
-      'comment': 'comment'
+      "lesson_id": 0,
+      "date": '2025-08-08',
+      "comment": "Заметка"
     }
-  ],
+  ]
 });
-
-// Описания предметов
-const subjectDescriptions = {
-  'Математика': 'Изучение чисел, структур, пространства и изменений. Включает алгебру, геометрию, математический анализ.',
-  'Физика': 'Наука о природе, изучающая материю, её движение и поведение в пространстве и времени.',
-  'Химия': 'Наука о веществах, их составе, строении, свойствах и превращениях.'
-};
 
 // Дни текущей недели
 const weekDays = computed(() => {
@@ -197,29 +188,25 @@ const getScheduleForDate = (date) => {
   });
 };
 
-// Получение комментариев для конкретного занятия
-const getCommentsForLesson = (lesson, date) => {
-  if (!lesson || !date) return [];
-  
-  const dateStr = formatDateYMD(date);
-  const lessonId = generateLessonId(lesson, dateStr);
-  
-  return schedule.value.comments?.filter(comment => 
-    comment.lesson_id === lessonId && comment.date === dateStr
-  ) || [];
+// Получение комментариев для занятия
+const getCommentsForLesson = (lesson) => {
+  if (!lesson) return [];
+  return schedule.value.comments?.filter(comment => comment.lesson_id === lesson.lesson_id) || [];
 };
 
-// Генерация ID для занятия
-const generateLessonId = (lesson, dateStr) => {
-  return `${lesson.subject_name}-${lesson.teacher_name}-${lesson.room}-${dateStr}`.hashCode();
-};
-
-// Добавление комментария
-const addComment = (commentData) => {
-  if (!schedule.value.comments) {
-    schedule.value.comments = [];
-  }
-  schedule.value.comments.push(commentData);
+// Генерация нового ID для занятия
+const generateNewLessonId = () => {
+  let maxId = 0;
+  Object.keys(schedule.value).forEach(day => {
+    if (Array.isArray(schedule.value[day])) {
+      schedule.value[day].forEach(lesson => {
+        if (lesson.lesson_id > maxId) {
+          maxId = lesson.lesson_id;
+        }
+      });
+    }
+  });
+  return maxId + 1;
 };
 
 // Открытие модального окна с деталями
@@ -248,54 +235,71 @@ const closeAddModal = () => {
   addLessonDate.value = null;
 };
 
-// Сохранение нового занятия
-const saveNewLesson = (lessonData) => {
+// Добавление нового занятия
+const addNewLesson = (lessonData) => {
   const dayName = getDayName(addLessonDate.value);
+  const dateStr = formatDateYMD(addLessonDate.value);
   
   if (!schedule.value[dayName]) {
     schedule.value[dayName] = [];
   }
   
-  schedule.value[dayName].push(lessonData);
+  // Генерируем новый ID и добавляем дату
+  const newLesson = {
+    ...lessonData,
+    lesson_id: generateNewLessonId(),
+    dates: [dateStr]
+  };
+  
+  schedule.value[dayName].push(newLesson);
   closeAddModal();
 };
 
-// Удаление занятия
-const deleteLesson = () => {
-  if (!selectedItem.value || !selectedDate.value) return;
-  
+// Обновление существующего занятия
+const updateLesson = (updatedLesson) => {
   const dayName = getDayName(selectedDate.value);
-  const dateStr = formatDateYMD(selectedDate.value);
   
-  schedule.value[dayName] = schedule.value[dayName].filter(item => 
-    !(item.subject_name === selectedItem.value.subject_name &&
-      item.teacher_name === selectedItem.value.teacher_name &&
-      item.room === selectedItem.value.room &&
-      item.dates.includes(dateStr))
-  );
+  const daySchedule = schedule.value[dayName];
+  if (daySchedule) {
+    const index = daySchedule.findIndex(item => item.lesson_id === selectedItem.value.lesson_id);
+    
+    if (index !== -1) {
+      // Обновляем занятие, сохраняя lesson_id и dates
+      daySchedule[index] = {
+        ...daySchedule[index],
+        ...updatedLesson
+      };
+    }
+  }
   
   closeModal();
 };
 
-// Добавление в календарь
-const addToCalendar = () => {
-  alert('Функция добавления в календарь будет реализована позже!');
-};
-
-// Хэш-функция для генерации ID
-String.prototype.hashCode = function() {
-  let hash = 0;
-  for (let i = 0; i < this.length; i++) {
-    const char = this.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+// Удаление занятия
+const deleteLesson = () => {
+  if (!selectedItem.value) return;
+  
+  const dayName = getDayName(selectedDate.value);
+  
+  const daySchedule = schedule.value[dayName];
+  if (daySchedule) {
+    // Удаляем занятие
+    schedule.value[dayName] = daySchedule.filter(item => item.lesson_id !== selectedItem.value.lesson_id);
+    
+    // Удаляем связанные комментарии
+    if (schedule.value.comments) {
+      schedule.value.comments = schedule.value.comments.filter(comment => 
+        comment.lesson_id !== selectedItem.value.lesson_id
+      );
+    }
   }
-  return hash;
+  
+  closeModal();
 };
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
 
 .schedule-app {
   max-width: 1200px;
@@ -303,7 +307,7 @@ String.prototype.hashCode = function() {
   padding: 30px 20px;
   min-height: 100vh;
   background-color: #f5f5f5;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
 }
 
 .title {

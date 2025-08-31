@@ -10,6 +10,8 @@ defineEmits(['add-click']);
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+
 .add-lesson-button {
   display: flex;
   align-items: center;
@@ -22,7 +24,7 @@ defineEmits(['add-click']);
   cursor: pointer;
   transition: all 0.3s ease;
   margin-top: 15px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   color: #4a2d7c;
   font-weight: 600;
 }

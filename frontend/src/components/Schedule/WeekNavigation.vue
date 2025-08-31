@@ -54,6 +54,8 @@ const hasEvents = (date) => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+
 .week-navigation {
   display: flex;
   justify-content: space-between;
@@ -63,6 +65,7 @@ const hasEvents = (date) => {
   border-radius: 15px;
   padding: 20px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  font-family: "Chiron GoRound TC", sans-serif;
 }
 
 .nav-button {
@@ -75,7 +78,7 @@ const hasEvents = (date) => {
   padding: 12px 18px;
   border-radius: 8px;
   font-size: 14px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   color: #4a2d7c;
   font-weight: 600;
   transition: all 0.3s;
@@ -105,7 +108,7 @@ const hasEvents = (date) => {
   border-radius: 10px;
   transition: all 0.3s;
   position: relative;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   border: 2px solid #ddd;
 }
 

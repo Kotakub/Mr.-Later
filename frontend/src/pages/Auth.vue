@@ -1,72 +1,3 @@
-<script>
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-
-export default {
-  setup() {
-    const router = useRouter();
-    
-    const formData = ref({
-      email: '',
-      password: ''
-    });
-    
-    const errors = ref({
-      email: '',
-      password: ''
-    });
-    
-    const validateForm = () => {
-      let isValid = true;
-      
-      // Reset errors
-      errors.value = { email: '', password: '' };
-      
-      // Validate email
-      if (!formData.value.email.trim()) {
-        errors.value.email = 'Почта обязательна';
-        isValid = false;
-      } else if (!/^\S+@\S+\.\S+$/.test(formData.value.email)) {
-        errors.value.email = 'Некорректный email';
-        isValid = false;
-      }
-      
-      // Validate password
-      if (!formData.value.password) {
-        errors.value.password = 'Пароль обязателен';
-        isValid = false;
-      } else if (formData.value.password.length < 6) {
-        errors.value.password = 'Пароль должен быть не менее 6 символов';
-        isValid = false;
-      }
-      
-      return isValid;
-    };
-    
-    const handleSubmit = () => {
-      if (validateForm()) {
-        // Здесь обычно отправка данных на сервер
-        console.log('Форма отправлена:', formData.value);
-        
-        // После успешной регистрации перенаправляем на страницу входа
-        router.push('/profile');
-      }
-    };
-    
-    const navigateToLogin = () => {
-      router.push('/registration');
-    };
-    
-    return {
-      formData,
-      errors,
-      handleSubmit,
-      navigateToLogin
-    };
-  }
-};
-</script>
-
 <template>
     <div class="auth-page">
         <div class="auth-window">
@@ -102,6 +33,112 @@ export default {
         </div>
     </div>
 </template>
+
+<script>
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+export default {
+  setup() {
+    const router = useRouter();
+    
+    const formData = ref({
+      email: '',
+      password: ''
+    });
+    
+    const errors = ref({
+      email: '',
+      password: ''
+    });
+    
+    const isLoading = ref(false);
+    
+    const validateForm = () => {
+      let isValid = true;
+      
+      // Reset errors
+      errors.value = { email: '', password: '' };
+      
+      // Validate email
+      if (!formData.value.email.trim()) {
+        errors.value.email = 'Почта обязательна';
+        isValid = false;
+      } else if (!/^\S+@\S+\.\S+$/.test(formData.value.email)) {
+        errors.value.email = 'Некорректный email';
+        isValid = false;
+      }
+      
+      // Validate password
+      if (!formData.value.password) {
+        errors.value.password = 'Пароль обязателен';
+        isValid = false;
+      } else if (formData.value.password.length < 6) {
+        errors.value.password = 'Пароль должен быть не менее 6 символов';
+        isValid = false;
+      }
+      
+      return isValid;
+    };
+    
+    const handleSubmit = async () => {
+      if (!validateForm()) return;
+      
+      isLoading.value = true;
+      
+      try {
+        const response = await fetch('http://localhost:8000/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            username: formData.value.email,
+            password: formData.value.password
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Ошибка аутентификации');
+        }
+        
+        const data = await response.json();
+        
+        // Сохраняем токен в localStorage
+        localStorage.setItem('auth_token', data.access_token);
+        
+        // Добавляем токен в заголовки по умолчанию
+        // (для последующих запросов к защищенным роутам)
+        
+        console.log('Успешный вход:', data);
+        
+        // Перенаправляем на защищенную страницу
+        router.push('/profile');
+        
+      } catch (error) {
+        console.error('Ошибка входа:', error);
+        errors.value.password = 'Неверный email или пароль';
+      } finally {
+        isLoading.value = false;
+      }
+    };
+    
+    const navigateToRegistration = () => {
+      router.push('/registration');
+    };
+    
+    return {
+      formData,
+      errors,
+      isLoading,
+      handleSubmit,
+      navigateToRegistration
+    };
+  }
+};
+</script>
+
+
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@100..800&family=Stick&display=swap');

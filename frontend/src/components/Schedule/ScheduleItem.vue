@@ -1,5 +1,8 @@
 <template>
   <div class="schedule-item" @click="$emit('item-click', item)">
+    <div class="time-badge" v-if="item.start_time && item.end_time">
+      {{ item.start_time }} - {{ item.end_time }}
+    </div>
     <div class="subject">{{ item.subject_name }}</div>
     <div class="teacher">Преподаватель: {{ item.teacher_name }}</div>
     <div class="room">Аудитория: {{ item.room }}</div>
@@ -25,6 +28,8 @@ defineEmits(['item-click']);
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+
 .schedule-item {
   padding: 18px;
   border-radius: 12px;
@@ -34,7 +39,7 @@ defineEmits(['item-click']);
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
   position: relative;
 }
 
@@ -48,11 +53,24 @@ defineEmits(['item-click']);
   margin-bottom: 15px;
 }
 
+.time-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #4a2d7c;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .subject {
   font-weight: 700;
   font-size: 17px;
   color: #4a2d7c;
   margin-bottom: 8px;
+  padding-right: 80px;
 }
 
 .teacher, .room {
@@ -72,7 +90,7 @@ defineEmits(['item-click']);
 
 .comment-indicator {
   position: absolute;
-  top: 10px;
+  bottom: 10px;
   right: 10px;
   font-size: 16px;
 }

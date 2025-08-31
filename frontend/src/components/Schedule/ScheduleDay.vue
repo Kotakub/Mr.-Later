@@ -46,7 +46,7 @@ const props = defineProps({
   },
   showAddButton: {
     type: Boolean,
-    default: true
+    default: false
   }
 });
 
@@ -59,12 +59,14 @@ const hasCommentsForItem = (item) => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+
 .schedule-day {
   background-color: #D3C5E5;
   border-radius: 15px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   padding: 25px;
-  font-family: "Stick", sans-serif;
+  font-family: "Chiron GoRound TC", sans-serif;
 }
 
 .schedule-day.clickable {
