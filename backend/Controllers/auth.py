@@ -4,12 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 # Импорты из вашей структуры проекта
-from database.database import get_db
-from database.models import Users
-from config import settings  # Импортируем настройки из config.py
+from ..Database.database import get_async_session
+from ..Database.models import Users
+from ..config import settings
+from ..Database.orm import *
 
 # Создаем роутер
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -25,43 +27,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class TokenData:
     def __init__(self, username: Optional[str] = None):
         self.username = username
-
-
-# Функция для создания JWT токена (использует настройки из config)
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
-    )
-    return encoded_jwt
-
-
-# Dependency для получения текущего пользователя
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-
-    return {"username": token_data.username}
 
 
 # Утилиты
@@ -82,17 +47,10 @@ def create_access_token(
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def get_user_by_email(db: Session, email: str) -> Users:
-    return db.query(Users).filter(Users.email == email).first()
-
-
-def get_user_by_login(db: Session, login: str) -> Users:
-    return db.query(Users).filter(Users.login == login).first()
-
-
 # Зависимости с доступом к БД
 async def get_current_user_db(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_async_session),  # Используем асинхронную зависимость
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -110,7 +68,7 @@ async def get_current_user_db(
     except JWTError:
         raise credentials_exception
 
-    user = get_user_by_email(db, email)
+    user = await get_user_by_email(db, email)
     if user is None:
         raise credentials_exception
 
@@ -120,23 +78,25 @@ async def get_current_user_db(
 # Роуты
 @router.post("/register")
 async def register(
-    login: str, email: str, password: str, db: Session = Depends(get_db)
+    login: str,
+    email: str,
+    password: str,
+    db: AsyncSession = Depends(get_async_session),  # Асинхронная сессия
 ):
     # Проверка существования пользователя
-    if get_user_by_email(db, email):
+    if await get_user_by_email(db, email):
         raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
 
-    if get_user_by_login(db, login):
+    if await get_user_by_login(db, login):
         raise HTTPException(status_code=400, detail="Логин уже занят")
 
     # Создание пользователя
     hashed_password = get_password_hash(password)
-
     user = Users(login=login, email=email, password=hashed_password)
 
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
 
     # Создание токена
     access_token = create_access_token(data={"sub": user.email})
@@ -149,19 +109,21 @@ async def register(
 
 
 @router.post("/login")
-async def login(username: str, password: str, db: Session = Depends(get_db)):
+async def login(
+    username: str,
+    password: str,
+    db: AsyncSession = Depends(get_async_session),  # Асинхронная сессия
+):
     # Поиск пользователя по email или логину
-    user = get_user_by_email(db, username)
+    user = await get_user_by_email(db, username)
     if not user:
-        user = get_user_by_login(db, username)
+        user = await get_user_by_login(db, username)
         if not user:
-            raise HTTPException(
-                status_code=401, detail="Неверный email/логин или пароль"
-            )
+            raise HTTPException(status_code=401, detail="Неверный email/логин")
 
     # Проверка пароля
     if not verify_password(password, user.password):
-        raise HTTPException(status_code=401, detail="Неверный email/логин или пароль")
+        raise HTTPException(status_code=401, detail="Неверный пароль")
 
     # Создание токена
     access_token = create_access_token(data={"sub": user.email})
@@ -171,57 +133,3 @@ async def login(username: str, password: str, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": {"id": user.id, "login": user.login, "email": user.email},
     }
-
-
-@router.get("/me")
-async def get_me(current_user: Users = Depends(get_current_user_db)):
-    return {
-        "id": current_user.id,
-        "login": current_user.login,
-        "email": current_user.email,
-    }
-
-
-@router.post("/logout")
-async def logout():
-    return {"message": "Успешный выход из системы"}
-
-
-@router.get("/check-auth")
-async def check_auth(current_user: Users = Depends(get_current_user_db)):
-    return {"authenticated": True, "user": current_user.login}
-
-
-@router.put("/me/update-password")
-async def update_password(
-    old_password: str,
-    new_password: str,
-    current_user: Users = Depends(get_current_user_db),
-    db: Session = Depends(get_db),
-):
-    """Обновление пароля пользователя"""
-    if not verify_password(old_password, current_user.password):
-        raise HTTPException(status_code=400, detail="Текущий пароль неверен")
-
-    current_user.password = get_password_hash(new_password)
-    db.commit()
-
-    return {"message": "Пароль успешно обновлен"}
-
-
-@router.get("/users")
-async def get_all_users(
-    db: Session = Depends(get_db), current_user: Users = Depends(get_current_user_db)
-):
-    """Получение всех пользователей (только для аутентифицированных)"""
-    users = db.query(Users).all()
-    return [{"id": user.id, "login": user.login, "email": user.email} for user in users]
-
-
-# Экспортируем зависимости для использования в других модулях
-__all__ = [
-    "get_current_user",
-    "get_current_user_db",
-    "oauth2_scheme",
-    "create_access_token",
-]

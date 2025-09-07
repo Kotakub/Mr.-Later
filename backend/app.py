@@ -34,5 +34,5 @@ async def root():
 
 # Если нужно защитить роуты в app.py, импортируйте зависимости из auth
 @app.get("/protected")
-async def protected_route(current_user=Depends(auth.get_current_user)):
+async def protected_route(current_user=Depends(auth.get_current_user_db)):
     return {"message": "This is a protected route", "user": current_user}

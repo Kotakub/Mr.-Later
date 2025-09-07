@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, date, time
-from database import Base
+from database.database import Base
 
 metadata_obj = MetaData()
 
