@@ -4,13 +4,13 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 # Импортируем роутеры
-from Controllers import auth, schedule
+import Router_Auth, Router_Schedule
 
 app = FastAPI(redirect_slashes=False)
 
 # Включаем роутеры
-app.include_router(schedule.router)
-app.include_router(auth.router)
+app.include_router(Router_Auth.router)
+app.include_router(Router_Schedule.router)
 
 # CORS middleware
 app.add_middleware(
@@ -34,5 +34,5 @@ async def root():
 
 # Если нужно защитить роуты в app.py, импортируйте зависимости из auth
 @app.get("/protected")
-async def protected_route(current_user=Depends(auth.get_current_user_db)):
+async def protected_route(current_user=Depends(Router_Auth.get_current_user_db)):
     return {"message": "This is a protected route", "user": current_user}

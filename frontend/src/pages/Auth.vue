@@ -73,8 +73,8 @@ export default {
       if (!formData.value.password) {
         errors.value.password = 'Пароль обязателен';
         isValid = false;
-      } else if (formData.value.password.length < 6) {
-        errors.value.password = 'Пароль должен быть не менее 6 символов';
+      } else if (formData.value.password.length < 8) {
+        errors.value.password = 'Пароль должен быть не менее 8 символов';
         isValid = false;
       }
       
@@ -87,7 +87,7 @@ export default {
       isLoading.value = true;
       
       try {
-        const response = await fetch('http://localhost:8000/token', {
+        const response = await fetch('http://localhost:8000/auth/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',

@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 # Импорты из вашей структуры проекта
-from ..Database.database import get_async_session
-from ..Database.models import Users
-from ..config import settings
-from ..Database.orm import *
+from database_main import get_async_session
+from models import Users
+from config import settings
+from database_ORM import *
 
 # Создаем роутер
 router = APIRouter(prefix="/auth", tags=["auth"])

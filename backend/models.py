@@ -9,9 +9,13 @@ from sqlalchemy import (
     Time,
     ForeignKey,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 from datetime import datetime, date, time
-from database.database import Base
+
+
+class Base(DeclarativeBase):
+    pass
+
 
 metadata_obj = MetaData()
 
