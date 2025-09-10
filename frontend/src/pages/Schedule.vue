@@ -1,68 +1,7 @@
-<template>
-  <div class="schedule-app">
-    <h1 class="title">Расписание занятий</h1>
-    
-    <WeekNavigation
-      :current-date="currentDate"
-      :week-days="weekDays"
-      :schedule="schedule"
-      @prev-week="changeWeek(-1)"
-      @next-week="changeWeek(1)"
-      @day-select="currentDate = $event"
-    />
-    
-    <div class="schedule-container">
-      <ScheduleDay
-        :title="formatDate(prevDate)"
-        :items="getScheduleForDate(prevDate)"
-        day-type="prev-day"
-        :clickable="true"
-        :show-add-button="false"
-        @day-click="changeDay(-1)"
-        @item-click="openModal($event, prevDate)"
-      />
-
-      <ScheduleDay
-        :title="formatDate(currentDate)"
-        :items="getScheduleForDate(currentDate)"
-        day-type="current-day"
-        :show-add-button="true"
-        @item-click="openModal($event, currentDate)"
-        @add-click="openAddLessonModal(currentDate)"
-      />
-
-      <ScheduleDay
-        :title="formatDate(nextDate)"
-        :items="getScheduleForDate(nextDate)"
-        day-type="next-day"
-        :clickable="true"
-        :show-add-button="false"
-        @day-click="changeDay(1)"
-        @item-click="openModal($event, nextDate)"
-      />
-    </div>
-
-    <LessonModal
-      v-if="isModalOpen"
-      :lesson="selectedItem"
-      :date="selectedDate"
-      :comments="getCommentsForLesson(selectedItem)"
-      @close="closeModal"
-      @delete="deleteLesson"
-      @save="updateLesson"
-    />
-
-    <AddLessonModal
-      v-if="isAddModalOpen"
-      :date="addLessonDate"
-      @close="closeAddModal"
-      @save="addNewLesson"
-    />
-  </div>
-</template>
-
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 import WeekNavigation from '../components/Schedule/WeekNavigation.vue';
 import ScheduleDay from '../components/Schedule/ScheduleDay.vue';
 import LessonModal from '../components/Schedule/LessonModal.vue';
@@ -71,9 +10,14 @@ import {
   getMonday, 
   formatDate, 
   getDayName, 
-  formatDateYMD 
+  formatDateYMD,
+  formatTime 
 } from '../utils/dateUtils';
 
+const router = useRouter();
+const API_BASE_URL = 'http://localhost:8000';
+
+// Состояния
 const currentDate = ref(new Date());
 const currentWeekStart = ref(getMonday(new Date()));
 const isModalOpen = ref(false);
@@ -81,56 +25,70 @@ const isAddModalOpen = ref(false);
 const selectedItem = ref(null);
 const selectedDate = ref(null);
 const addLessonDate = ref(null);
+const isLoading = ref(false);
+const error = ref(null);
 
-// Данные расписания с lesson_id и comments
-const schedule = ref({
-  "monday": [
-    {
-      'lesson_id': 0,
-      'dates': ['2025-08-01','2025-08-08'],
-      'subject_name': 'Математика',
-      'teacher_name': 'Иванов И.И.',
-      'room': '101',
-      'start_time': '09:00',
-      'end_time': '10:30',
-      'description': 'Изучение алгебры и геометрии'
+// Данные с бэкенда
+const scheduleData = ref([]);
+
+// Текущий пользователь
+const currentUser = ref(null);
+const isLoadingUser = ref(true);
+
+// Функция для получения информации о пользователе из токена
+const getCurrentUserFromToken = () => {
+  try {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('No token found');
     }
-  ],
-  "tuesday": [
-    {
-      'lesson_id': 1,
-      'dates': ['2025-08-02','2025-08-09'],
-      'subject_name': 'Физика',
-      'teacher_name': 'Петров П.П.',
-      'room': '202',
-      'start_time': '11:00',
-      'end_time': '12:30',
-      'description': 'Механика и термодинамика'
-    },
-    {
-      'lesson_id': 2,
-      'dates': ['2025-08-03','2025-08-10'],
-      'subject_name': 'Химия',
-      'teacher_name': 'Сидоров С.С.',
-      'room': '303',
-      'start_time': '14:00',
-      'end_time': '15:30',
-      'description': 'Органическая химия'
+
+    // Добавляем токен в заголовки axios по умолчанию
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    // Парсим payload из JWT токена
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    
+    // В вашем токене в sub хранится email, но нам нужен login
+    // Будем получать информацию о пользователе через защищенный эндпоинт
+    return {
+      email: payload.sub,
+      // Временно используем email как login, пока не получим данные с сервера
+      login: payload.sub.split('@')[0] 
+    };
+
+  } catch (err) {
+    console.error('Error parsing token:', err);
+    localStorage.removeItem('auth_token');
+    router.push('/auth');
+    return null;
+  }
+};
+
+// Функция для получения полной информации о пользователе
+const getCurrentUserInfo = async () => {
+  try {
+    const tokenUser = getCurrentUserFromToken();
+    if (!tokenUser) return;
+
+    // Используем защищенный роут для получения информации о пользователе
+    const response = await axios.get(`${API_BASE_URL}/protected`);
+    currentUser.value = {
+      login: response.data.user.login,
+      email: response.data.user.email,
+      id: response.data.user.id
+    };
+
+  } catch (err) {
+    console.error('Error getting user info:', err);
+    if (err.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      router.push('/auth');
     }
-  ],
-  "wednesday": [],
-  "thursday": [],
-  "friday": [],
-  "saturday": [],
-  "sunday": [],
-  "comments": [
-    {
-      "lesson_id": 0,
-      "date": '2025-08-08',
-      "comment": "Заметка"
-    }
-  ]
-});
+  } finally {
+    isLoadingUser.value = false;
+  }
+};
 
 // Дни текущей недели
 const weekDays = computed(() => {
@@ -143,10 +101,73 @@ const weekDays = computed(() => {
   return days;
 });
 
-// Обновляем текущую неделю при изменении даты
-watch(currentDate, (newDate) => {
-  currentWeekStart.value = getMonday(newDate);
+// Загрузка расписания
+const loadSchedule = async () => {
+  if (!currentUser.value) return;
+
+  try {
+    isLoading.value = true;
+    error.value = null;
+    
+    const response = await axios.get(
+      `${API_BASE_URL}/get_schedule/${currentUser.value.login}`
+    );
+    scheduleData.value = response.data;
+    
+  } catch (err) {
+    if (err.response?.status === 401) {
+      // Неавторизован - перенаправляем на страницу входа
+      localStorage.removeItem('auth_token');
+      router.push('/auth');
+    } else if (err.response?.status === 404) {
+      // У пользователя нет расписания - это нормально
+      scheduleData.value = [];
+    } else {
+      error.value = 'Ошибка загрузки расписания';
+      console.error('Error loading schedule:', err);
+    }
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// Загрузка при монтировании
+onMounted(async () => {
+  await getCurrentUserInfo();
+  if (currentUser.value) {
+    await loadSchedule();
+  }
 });
+
+watch(currentWeekStart, () => {
+  if (currentUser.value) {
+    loadSchedule();
+  }
+});
+
+// Получение расписания для конкретной даты
+const getScheduleForDate = (date) => {
+  if (!scheduleData.value.length) return [];
+
+  const dateStr = formatDateYMD(date);
+  
+  return scheduleData.value.filter(lesson => {
+    const startDate = new Date(lesson.startDate);
+    const endDate = new Date(lesson.endDate);
+    
+    // Проверяем, попадает ли дата в диапазон урока
+    return date >= startDate && date <= endDate;
+  }).map(lesson => ({
+    lesson_id: lesson.id,
+    dates: [formatDateYMD(new Date(lesson.startDate))],
+    subject_name: lesson.subject_name,
+    teacher_name: lesson.teacher_name,
+    start_time: formatTime(new Date('1970-01-01T' + lesson.startTime)),
+    end_time: formatTime(new Date('1970-01-01T' + lesson.endTime)),
+    repeat: lesson.repeat,
+    dayOfWeek: lesson.dayOfWeek
+  }));
+};
 
 // Вычисляемые даты для предыдущего и следующего дня
 const prevDate = computed(() => {
@@ -175,40 +196,6 @@ const changeWeek = (weeks) => {
   currentDate.value = new Date(newDate);
 };
 
-// Получение расписания для конкретной даты
-const getScheduleForDate = (date) => {
-  const dayName = getDayName(date);
-  const dateStr = formatDateYMD(date);
-  
-  const daySchedule = schedule.value[dayName] || [];
-  
-  // Фильтруем занятия по датам
-  return daySchedule.filter(item => {
-    return item.dates.includes(dateStr);
-  });
-};
-
-// Получение комментариев для занятия
-const getCommentsForLesson = (lesson) => {
-  if (!lesson) return [];
-  return schedule.value.comments?.filter(comment => comment.lesson_id === lesson.lesson_id) || [];
-};
-
-// Генерация нового ID для занятия
-const generateNewLessonId = () => {
-  let maxId = 0;
-  Object.keys(schedule.value).forEach(day => {
-    if (Array.isArray(schedule.value[day])) {
-      schedule.value[day].forEach(lesson => {
-        if (lesson.lesson_id > maxId) {
-          maxId = lesson.lesson_id;
-        }
-      });
-    }
-  });
-  return maxId + 1;
-};
-
 // Открытие модального окна с деталями
 const openModal = (item, date) => {
   selectedItem.value = item;
@@ -216,91 +203,165 @@ const openModal = (item, date) => {
   isModalOpen.value = true;
 };
 
-// Закрытие модального окна с деталями
+// Закрытие модального окна
 const closeModal = () => {
   isModalOpen.value = false;
   selectedItem.value = null;
   selectedDate.value = null;
 };
 
-// Открытие модального окна добавления занятия
+// Открытие модального окна добавления
 const openAddLessonModal = (date) => {
   addLessonDate.value = date;
   isAddModalOpen.value = true;
 };
 
-// Закрытие модального окна добавления занятия
+// Закрытие модального окна добавления
 const closeAddModal = () => {
   isAddModalOpen.value = false;
   addLessonDate.value = null;
 };
 
-// Добавление нового занятия
-const addNewLesson = (lessonData) => {
-  const dayName = getDayName(addLessonDate.value);
-  const dateStr = formatDateYMD(addLessonDate.value);
-  
-  if (!schedule.value[dayName]) {
-    schedule.value[dayName] = [];
+// Добавление нового урока
+const addNewLesson = async (lessonData) => {
+  try {
+    const lessonPayload = {
+      user_login: currentUser.value.login,
+      teacher_name: lessonData.teacher_name,
+      subject_name: lessonData.subject_name,
+      startDate: formatDateYMD(addLessonDate.value),
+      endDate: formatDateYMD(addLessonDate.value),
+      startTime: lessonData.start_time + ':00',
+      endTime: lessonData.end_time + ':00',
+      repeat: lessonData.repeat || false,
+      dayOfWeek: getDayName(addLessonDate.value)
+    };
+
+    await axios.post(`${API_BASE_URL}/add_lesson`, lessonPayload);
+    await loadSchedule();
+    closeAddModal();
+    
+  } catch (err) {
+    error.value = 'Ошибка добавления урока';
+    console.error('Error adding lesson:', err);
   }
-  
-  // Генерируем новый ID и добавляем дату
-  const newLesson = {
-    ...lessonData,
-    lesson_id: generateNewLessonId(),
-    dates: [dateStr]
-  };
-  
-  schedule.value[dayName].push(newLesson);
-  closeAddModal();
 };
 
-// Обновление существующего занятия
-const updateLesson = (updatedLesson) => {
-  const dayName = getDayName(selectedDate.value);
-  
-  const daySchedule = schedule.value[dayName];
-  if (daySchedule) {
-    const index = daySchedule.findIndex(item => item.lesson_id === selectedItem.value.lesson_id);
+// Обновление урока
+const updateLesson = async (updatedLesson) => {
+  try {
+    const lessonPayload = {
+      teacher_name: updatedLesson.teacher_name,
+      subject_name: updatedLesson.subject_name,
+      startTime: updatedLesson.start_time + ':00',
+      endTime: updatedLesson.end_time + ':00',
+      repeat: updatedLesson.repeat,
+      dayOfWeek: updatedLesson.dayOfWeek
+    };
+
+    await axios.put(
+      `${API_BASE_URL}/edit_lesson/${selectedItem.value.lesson_id}`,
+      lessonPayload
+    );
+    await loadSchedule();
+    closeModal();
     
-    if (index !== -1) {
-      // Обновляем занятие, сохраняя lesson_id и dates
-      daySchedule[index] = {
-        ...daySchedule[index],
-        ...updatedLesson
-      };
-    }
+  } catch (err) {
+    error.value = 'Ошибка обновления урока';
+    console.error('Error updating lesson:', err);
   }
-  
-  closeModal();
 };
 
-// Удаление занятия
-const deleteLesson = () => {
-  if (!selectedItem.value) return;
-  
-  const dayName = getDayName(selectedDate.value);
-  
-  const daySchedule = schedule.value[dayName];
-  if (daySchedule) {
-    // Удаляем занятие
-    schedule.value[dayName] = daySchedule.filter(item => item.lesson_id !== selectedItem.value.lesson_id);
+// Удаление урока
+const deleteLesson = async () => {
+  try {
+    await axios.delete(
+      `${API_BASE_URL}/delete_lesson/${selectedItem.value.lesson_id}`
+    );
+    await loadSchedule();
+    closeModal();
     
-    // Удаляем связанные комментарии
-    if (schedule.value.comments) {
-      schedule.value.comments = schedule.value.comments.filter(comment => 
-        comment.lesson_id !== selectedItem.value.lesson_id
-      );
-    }
+  } catch (err) {
+    error.value = 'Ошибка удаления урока';
+    console.error('Error deleting lesson:', err);
   }
-  
-  closeModal();
 };
 </script>
 
-<style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+<template>
+  <div class="schedule-app">
+    <h1 class="title">Расписание занятий</h1>
+    
+    <!-- Индикатор загрузки -->
+    <div v-if="isLoadingUser" class="loading">Загрузка информации о пользователе...</div>
+    <div v-else-if="isLoading" class="loading">Загрузка расписания...</div>
+    
+    <!-- Сообщение об ошибке -->
+    <div v-if="error" class="error">{{ error }}</div>
+    
+    <div v-if="currentUser && !isLoading">
+      <WeekNavigation
+        :current-date="currentDate"
+        :week-days="weekDays"
+        :schedule="scheduleData"
+        @prev-week="changeWeek(-1)"
+        @next-week="changeWeek(1)"
+        @day-select="currentDate = $event"
+      />
+      
+      <div class="schedule-container">
+        <ScheduleDay
+          :title="formatDate(prevDate)"
+          :items="getScheduleForDate(prevDate)"
+          day-type="prev-day"
+          :clickable="true"
+          :show-add-button="false"
+          @day-click="changeDay(-1)"
+          @item-click="openModal($event, prevDate)"
+        />
 
+        <ScheduleDay
+          :title="formatDate(currentDate)"
+          :items="getScheduleForDate(currentDate)"
+          day-type="current-day"
+          :show-add-button="true"
+          @item-click="openModal($event, currentDate)"
+          @add-click="openAddLessonModal(currentDate)"
+        />
+
+        <ScheduleDay
+          :title="formatDate(nextDate)"
+          :items="getScheduleForDate(nextDate)"
+          day-type="next-day"
+          :clickable="true"
+          :show-add-button="false"
+          @day-click="changeDay(1)"
+          @item-click="openModal($event, nextDate)"
+        />
+      </div>
+
+      <LessonModal
+        v-if="isModalOpen"
+        :lesson="selectedItem"
+        :date="selectedDate"
+        :comments="[]"
+        @close="closeModal"
+        @delete="deleteLesson"
+        @save="updateLesson"
+      />
+
+      <AddLessonModal
+        v-if="isAddModalOpen"
+        :date="addLessonDate"
+        @close="closeAddModal"
+        @save="addNewLesson"
+      />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+/* Стили остаются без изменений */
 .schedule-app {
   max-width: 1200px;
   margin: 0 auto;
@@ -324,6 +385,22 @@ const deleteLesson = () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 25px;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: #4a2d7c;
+  font-size: 18px;
+}
+
+.error {
+  text-align: center;
+  padding: 20px;
+  color: #ff0000;
+  background-color: #ffe6e6;
+  border-radius: 5px;
+  margin-bottom: 20px;
 }
 
 @media (max-width: 768px) {

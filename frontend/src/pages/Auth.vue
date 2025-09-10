@@ -24,11 +24,14 @@
                 id="password"
                 placeholder="HvblcGqc"
             />
+            <span v-if="errors.password" class="error-message">{{ errors.password }}</span>
+            
             <div class="login-prompt">
-                Нету аккаунта? <span class="register-link" @click="navigateToLogin">Зарегистрироваться</span>
+                Нету аккаунта? <span class="register-link" @click="navigateToRegistration">Зарегистрироваться</span>
             </div>
-            <button class="submit-button" @click="handleSubmit">
-                ВОЙТИ
+            
+            <button class="submit-button" @click="handleSubmit" :disabled="isLoading">
+                {{ isLoading ? 'ЗАГРУЗКА...' : 'ВОЙТИ' }}
             </button>
         </div>
     </div>
@@ -107,13 +110,10 @@ export default {
         // Сохраняем токен в localStorage
         localStorage.setItem('auth_token', data.access_token);
         
-        // Добавляем токен в заголовки по умолчанию
-        // (для последующих запросов к защищенным роутам)
-        
         console.log('Успешный вход:', data);
         
-        // Перенаправляем на защищенную страницу
-        router.push('/profile');
+        // ПЕРЕНАПРАВЛЯЕМ НА СТРАНИЦУ РАСПИСАНИЯ ВМЕСТО ПРОФИЛЯ
+        router.push('/schedule');
         
       } catch (error) {
         console.error('Ошибка входа:', error);
@@ -137,8 +137,6 @@ export default {
   }
 };
 </script>
-
-
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
@@ -178,7 +176,7 @@ export default {
 
 .auth-input {
     padding: 12px 15px;
-    margin-bottom: 20px;
+    margin-bottom: 5px;
     border: 2px solid #ddd;
     border-radius: 8px;
     font-size: 16px;
@@ -195,11 +193,26 @@ export default {
     color: #aaa;
 }
 
+.error-message {
+    color: #ff0000;
+    font-size: 14px;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.login-prompt {
+    margin-top: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 14px;
+}
+
 .register-link {
     color: #4a2d7c;
     text-decoration: none;
     margin-left: 5px;
     font-weight: 600;
+    cursor: pointer;
 }
 
 .register-link:hover {
@@ -211,7 +224,6 @@ export default {
     color: white;
     border: none;
     padding: 14px;
-    margin-top: 20px;
     border-radius: 8px;
     font-size: 16px;
     font-weight: 600;
@@ -220,7 +232,12 @@ export default {
     transition: background-color 0.3s;
 }
 
-.submit-button:hover {
+.submit-button:hover:not(:disabled) {
     background-color: #3a225f;
+}
+
+.submit-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
 }
 </style>

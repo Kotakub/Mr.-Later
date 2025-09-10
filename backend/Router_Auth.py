@@ -1,35 +1,28 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
-# Импорты из вашей структуры проекта
+
 from database_main import get_async_session
 from models import Users
 from config import settings
 from database_ORM import *
 
-# Создаем роутер
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Настройка OAuth2
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-
-# Настройка шифрования паролей
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# Модель для данных токена
 class TokenData:
     def __init__(self, username: Optional[str] = None):
         self.username = username
 
 
-# Утилиты
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -47,10 +40,9 @@ def create_access_token(
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-# Зависимости с доступом к БД
 async def get_current_user_db(
     token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_async_session),  # Используем асинхронную зависимость
+    db: AsyncSession = Depends(get_async_session),
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,61 +67,130 @@ async def get_current_user_db(
     return user
 
 
-# Роуты
+# Роутеры
 @router.post("/register")
-async def register(
-    login: str,
-    email: str,
-    password: str,
-    db: AsyncSession = Depends(get_async_session),  # Асинхронная сессия
-):
-    # Проверка существования пользователя
-    if await get_user_by_email(db, email):
-        raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
+async def register(request: Request, db: AsyncSession = Depends(get_async_session)):
+    try:
+        print("=== REGISTER ENDPOINT CALLED ===")
 
-    if await get_user_by_login(db, login):
-        raise HTTPException(status_code=400, detail="Логин уже занят")
+        # Получаем JSON из тела запроса
+        json_data = await request.json()
+        print(f"Received JSON data: {json_data}")
 
-    # Создание пользователя
-    hashed_password = get_password_hash(password)
-    user = Users(login=login, email=email, password=hashed_password)
+        # Валидация обязательных полей
+        required_fields = ["login", "email", "password"]
+        for field in required_fields:
+            if field not in json_data:
+                error_msg = f"Отсутствует обязательное поле: {field}"
+                print(f"Validation error: {error_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_msg,
+                )
 
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+        print("Basic validation passed")
 
-    # Создание токена
-    access_token = create_access_token(data={"sub": user.email})
+        # Проверка уникальности email
+        print(f"Checking email: {json_data['email']}")
+        existing_user_email = await get_user_by_email(db, json_data["email"])
+        print(f"Email check result: {existing_user_email}")
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {"id": user.id, "login": user.login, "email": user.email},
-    }
+        if existing_user_email is not None:
+            error_msg = "Email уже зарегистрирован"
+            print(f"Email error: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        # Проверка уникальности логина
+        print(f"Checking login: {json_data['login']}")
+        existing_user_login = await get_user_by_login(db, json_data["login"])
+        print(f"Login check result: {existing_user_login}")
+
+        if existing_user_login is not None:
+            error_msg = "Логин уже занят"
+            print(f"Login error: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        print("All checks passed, creating user...")
+
+        # Добавление пользователя
+        hashed_password = get_password_hash(json_data["password"])
+        print(f"Password hashed successfully: {hashed_password[:20]}...")
+
+        user = Users(
+            login=json_data["login"], email=json_data["email"], password=hashed_password
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        print(f"User created: {user.id}")
+
+        # Создание токена
+        access_token = create_access_token(data={"sub": user.email})
+        print(f"Token created: {access_token[:20]}...")
+
+        print("Registration successful")
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {"id": user.id, "login": user.login, "email": user.email},
+        }
+
+    except HTTPException as he:
+        print(f"HTTPException: {he.detail}")
+        await db.rollback()
+        raise he
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+
+        traceback.print_exc()  # Это покажет полный traceback
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ошибка регистрации: {str(e)}",
+        )
 
 
 @router.post("/login")
-async def login(
-    username: str,
-    password: str,
-    db: AsyncSession = Depends(get_async_session),  # Асинхронная сессия
-):
-    # Поиск пользователя по email или логину
-    user = await get_user_by_email(db, username)
-    if not user:
-        user = await get_user_by_login(db, username)
+async def login(request: Request, db: AsyncSession = Depends(get_async_session)):
+    try:
+        # Получаем JSON из тела запроса
+        json_data = await request.json()
+
+        # Валидация обязательных полей
+        required_fields = ["username", "password"]
+        for field in required_fields:
+            if field not in json_data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Отсутствует обязательное поле: {field}",
+                )
+
+        # Поиск пользователя
+        user = await get_user_by_email(db, json_data["username"])
         if not user:
-            raise HTTPException(status_code=401, detail="Неверный email/логин")
+            user = await get_user_by_login(db, json_data["username"])
+            if not user:
+                raise HTTPException(status_code=401, detail="Неверный email/логин")
 
-    # Проверка пароля
-    if not verify_password(password, user.password):
-        raise HTTPException(status_code=401, detail="Неверный пароль")
+        # Проверка пароля
+        if not verify_password(json_data["password"], user.password):
+            raise HTTPException(status_code=401, detail="Неверный пароль")
 
-    # Создание токена
-    access_token = create_access_token(data={"sub": user.email})
+        # Создание токена
+        access_token = create_access_token(data={"sub": user.email})
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {"id": user.id, "login": user.login, "email": user.email},
-    }
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {"id": user.id, "login": user.login, "email": user.email},
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ошибка входа: {str(e)}",
+        )

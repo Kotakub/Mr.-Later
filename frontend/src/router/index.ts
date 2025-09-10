@@ -1,7 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import Auth from '../pages/Auth.vue';
-import Regist from '../pages/Registation.vue';
-import Schedule from '../pages/Schedule.vue'
+import { defineAsyncComponent } from 'vue';
+
+const Auth = defineAsyncComponent(() => import('../pages/Auth.vue'));
+const Schedule = defineAsyncComponent(() => import('../pages/Schedule.vue'));
+const Registr = defineAsyncComponent(() => import('../pages/Registration.vue'));
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -11,9 +14,9 @@ const router = createRouter({
       component: Auth
     },
     {
-      path:'/registration',
+      path: '/registration',
       name: 'registration',
-      component: Regist
+      component: Registr
     },
     {
       path: '/schedule',
