@@ -5,16 +5,17 @@
                 АВТОРИЗАЦИЯ
             </h1>
 
-            <span class="span-input">Почта</span>
+            <span class="span-input">Почта или логин</span>
             <input 
                 class="auth-input" 
                 type="text"
                 required
-                id="email"
-                v-model="formData.email"
-                placeholder="example@mail.ru"
+                id="username"
+                v-model="formData.username"
+                placeholder="example@mail.ru или ваш логин"
             />
-            <span v-if="errors.email" class="error-message">{{ errors.email }}</span>
+            <span v-if="errors.username" class="error-message">{{ errors.username }}</span>
+            
             <span class="span-input">Пароль</span>
             <input 
                 class="auth-input"
@@ -46,12 +47,12 @@ export default {
     const router = useRouter();
     
     const formData = ref({
-      email: '',
+      username: '',
       password: ''
     });
     
     const errors = ref({
-      email: '',
+      username: '',
       password: ''
     });
     
@@ -61,14 +62,11 @@ export default {
       let isValid = true;
       
       // Reset errors
-      errors.value = { email: '', password: '' };
+      errors.value = { username: '', password: '' };
       
-      // Validate email
-      if (!formData.value.email.trim()) {
-        errors.value.email = 'Почта обязательна';
-        isValid = false;
-      } else if (!/^\S+@\S+\.\S+$/.test(formData.value.email)) {
-        errors.value.email = 'Некорректный email';
+      // Validate username
+      if (!formData.value.username.trim()) {
+        errors.value.username = 'Почта или логин обязательны';
         isValid = false;
       }
       
@@ -93,31 +91,30 @@ export default {
         const response = await fetch('http://localhost:8000/auth/login', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
           },
-          body: new URLSearchParams({
-            username: formData.value.email,
-            password: formData.value.password
-          })
+          body: JSON.stringify(formData.value)
         });
         
         if (!response.ok) {
-          throw new Error('Ошибка аутентификации');
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Ошибка аутентификации');
         }
         
         const data = await response.json();
         
         // Сохраняем токен в localStorage
         localStorage.setItem('auth_token', data.access_token);
+        localStorage.setItem('user_data', JSON.stringify(data.user));
         
         console.log('Успешный вход:', data);
         
-        // ПЕРЕНАПРАВЛЯЕМ НА СТРАНИЦУ РАСПИСАНИЯ ВМЕСТО ПРОФИЛЯ
+        // Перенаправляем на страницу расписания
         router.push('/schedule');
         
       } catch (error) {
         console.error('Ошибка входа:', error);
-        errors.value.password = 'Неверный email или пароль';
+        errors.value.password = error.message || 'Неверные учетные данные';
       } finally {
         isLoading.value = false;
       }

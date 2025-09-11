@@ -67,9 +67,20 @@
         ></textarea>
       </div>
 
-      <!-- Блок комментариев -->
+      <!-- Поле для нового комментария -->
+      <div class="form-group">
+        <label class="span-input">Комментарий на {{ formatCommentDate(currentDate) }}:</label>
+        <textarea 
+          v-model="editedLesson.new_comment" 
+          placeholder="Введите комментарий для этой даты..."
+          class="registr-input textarea"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <!-- Блок существующих комментариев -->
       <div class="form-group" v-if="comments.length > 0">
-        <label class="span-input">Комментарии:</label>
+        <label class="span-input">Предыдущие комментарии:</label>
         <div class="comments-section">
           <div 
             v-for="(comment, index) in comments" 
@@ -101,8 +112,8 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue';
-import { formatDate } from '../../utils/dateUtils';
+import { reactive, computed, watch, ref } from 'vue';
+import { formatDate, formatDateYMD } from '../../utils/dateUtils';
 
 const props = defineProps({
   lesson: Object,
@@ -112,12 +123,17 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'delete', 'save']);
 
+const currentDate = ref(props.date ? new Date(props.date) : new Date());
+
 const editedLesson = reactive({
   subject_name: '',
   teacher_name: '',
   room: '',
   start_time: '09:00',
   end_time: '10:30',
+  description: '',
+  new_comment: '', // Добавляем поле для нового комментария
+  dayOfWeek: '' // Добавляем день недели
 });
 
 // Инициализация формы при открытии модального окна
@@ -129,7 +145,9 @@ watch(() => props.lesson, (newLesson) => {
       room: newLesson.room || '',
       start_time: newLesson.start_time || '09:00',
       end_time: newLesson.end_time || '10:30',
-      description: newLesson.description || ''
+      description: newLesson.description || '',
+      dayOfWeek: newLesson.dayOfWeek || '',
+      new_comment: '' // Сбрасываем комментарий при каждом открытии
     });
   }
 }, { immediate: true });
@@ -143,11 +161,11 @@ const formattedDate = computed(() => {
   }) : '';
 });
 
-const formatCommentDate = (dateStr) => {
-  const date = new Date(dateStr);
-  return formatDate(date, { 
+const formatCommentDate = (dateObj) => {
+  return formatDate(dateObj, { 
     day: 'numeric', 
-    month: 'long'
+    month: 'long',
+    year: 'numeric'
   });
 };
 
@@ -163,239 +181,35 @@ const isFormValid = computed(() => {
 const saveChanges = () => {
   if (!isFormValid.value) return;
   
-  emit('save', editedLesson);
+  // Создаем объект с данными для сохранения
+  const saveData = {
+    ...editedLesson,
+    comment: editedLesson.new_comment.trim() // Добавляем комментарий если он есть
+  };
+  
+  emit('save', saveData);
 };
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 20px;
-  font-family: "Chiron GoRound TC", sans-serif;
-}
-
-.modal-content {
-  background-color: #D3C5E5;
-  border-radius: 15px;
-  padding: 30px;
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-
-.modal-close {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 50%;
-  transition: background-color 0.3s;
-  color: #4a2d7c;
-}
-
-.modal-close:hover {
-  background: rgba(74, 45, 124, 0.1);
-}
-
-.modal-content h2 {
-  color: #4a2d7c;
-  margin-bottom: 20px;
-  text-align: center;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.modal-subtitle {
-  color: #5d4b7a;
-  margin-bottom: 25px;
-  font-size: 16px;
-  text-align: center;
-  font-weight: 600;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.span-input {
-  font-size: 16px;
-  margin-bottom: 8px;
-  color: #4a2d7c;
-  font-weight: 600;
-  display: block;
-}
-
-.registr-input {
-  padding: 12px 15px;
-  width: 100%;
-  border: 2px solid #9f8cb9;
-  border-radius: 8px;
-  font-size: 16px;
-  font-family: "Chiron GoRound TC", sans-serif;
-  transition: border-color 0.3s;
-  background: white;
-  color: #333;
-}
-
-.registr-input:focus {
-  outline: none;
-  border-color: #4a2d7c;
-}
-
-.registr-input::placeholder {
-  color: #aaa;
-}
-
-.textarea {
-  resize: vertical;
-  min-height: 100px;
-  font-family: "Chiron GoRound TC", sans-serif;
-}
-
-/* Стили для комментариев */
+/* Стили остаются без изменений, только добавляем для нового комментария */
 .comments-section {
+  max-height: 200px;
+  overflow-y: auto;
   margin-top: 10px;
 }
 
 .comment-item {
-  padding: 12px;
+  padding: 10px;
   background: rgba(255, 255, 255, 0.8);
-  border-radius: 8px;
+  border-radius: 6px;
   margin-bottom: 8px;
   border-left: 3px solid #ffa726;
-  font-size: 14px;
+  font-size: 13px;
   color: #5d4b7a;
 }
 
 .comment-item:last-child {
   margin-bottom: 0;
-}
-
-/* Стили для времени */
-.time-group {
-  margin-bottom: 25px;
-}
-
-.time-inputs {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.time-input {
-  flex: 1;
-  text-align: center;
-}
-
-.time-separator {
-  color: #5d4b7a;
-  font-weight: 600;
-  font-size: 18px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-top: 25px;
-}
-
-.action-button {
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-family: "Chiron GoRound TC", sans-serif;
-  font-weight: 600;
-  transition: all 0.3s;
-  flex: 1;
-}
-
-.action-button.secondary {
-  background: #f8f9fa;
-  color: #5d4b7a;
-  border: 2px solid #9f8cb9;
-}
-
-.action-button.secondary:hover {
-  background: #e9ecef;
-}
-
-.action-button.danger {
-  background: #ff4757;
-  color: white;
-}
-
-.action-button.danger:hover {
-  background: #ff3742;
-}
-
-.submit-button {
-  background-color: #4a2d7c;
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: "Chiron GoRound TC", sans-serif;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  flex: 1;
-}
-
-.submit-button:hover:not(:disabled) {
-  background-color: #3a225f;
-}
-
-.submit-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-@media (max-width: 768px) {
-  .modal-content {
-    margin: 10px;
-    padding: 25px;
-  }
-
-  .modal-actions {
-    flex-direction: column;
-  }
-
-  .action-button, .submit-button {
-    width: 100%;
-  }
-
-  .time-inputs {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .time-separator {
-    margin: 5px 0;
-  }
-  
-  .modal-content h2 {
-    font-size: 22px;
-  }
 }
 </style>

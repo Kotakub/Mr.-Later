@@ -253,16 +253,30 @@ const updateLesson = async (updatedLesson) => {
     const lessonPayload = {
       teacher_name: updatedLesson.teacher_name,
       subject_name: updatedLesson.subject_name,
+      room: updatedLesson.room,
       startTime: updatedLesson.start_time + ':00',
       endTime: updatedLesson.end_time + ':00',
-      repeat: updatedLesson.repeat,
-      dayOfWeek: updatedLesson.dayOfWeek
+      repeat: updatedLesson.repeat || false,
+      dayOfWeek: updatedLesson.dayOfWeek,
+      description: updatedLesson.description || ''
     };
 
     await axios.put(
       `${API_BASE_URL}/edit_lesson/${selectedItem.value.lesson_id}`,
       lessonPayload
     );
+    
+    // Отправляем комментарий, если он не пустой
+    if (updatedLesson.comment && updatedLesson.comment.trim() !== '') {
+      const commentPayload = {
+        lesson_id: selectedItem.value.lesson_id,
+        date: formatDateYMD(selectedDate.value),
+        comment: updatedLesson.comment.trim()
+      };
+      
+      await axios.put(`${API_BASE_URL}/edit_comment`, commentPayload);
+    }
+    
     await loadSchedule();
     closeModal();
     

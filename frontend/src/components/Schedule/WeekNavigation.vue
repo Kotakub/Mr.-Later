@@ -46,14 +46,40 @@ const props = defineProps({
 const emit = defineEmits(['prev-week', 'next-week', 'day-select']);
 
 const hasEvents = (date) => {
-  const dayName = getDayName(date);
-  const dateStr = formatDateYMD(date);
-  const daySchedule = props.schedule[dayName] || [];
-  return daySchedule.some(item => item.dates.includes(dateStr));
+  try {
+    const dayName = getDayName(date);
+    const dateStr = formatDateYMD(date);
+    
+    // ✅ Добавляем проверки на существование свойств
+    if (!props.schedule || !props.schedule[dayName]) {
+      return false;
+    }
+    
+    const daySchedule = props.schedule[dayName];
+    
+    // Проверяем, что daySchedule - массив
+    if (!Array.isArray(daySchedule)) {
+      return false;
+    }
+    
+    // Ищем события для этой даты с проверкой на существование dates
+    return daySchedule.some(item => {
+      // Проверяем, что item существует и имеет свойство dates
+      if (!item || !item.dates || !Array.isArray(item.dates)) {
+        return false;
+      }
+      return item.dates.includes(dateStr);
+    });
+    
+  } catch (error) {
+    console.error('Error in hasEvents:', error);
+    return false;
+  }
 };
 </script>
 
 <style scoped>
+/* Стили остаются без изменений */
 @import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
 
 .week-navigation {
