@@ -112,7 +112,14 @@ const loadSchedule = async () => {
     const response = await axios.get(
       `${API_BASE_URL}/get_schedule/${currentUser.value.login}`
     );
-    scheduleData.value = response.data;
+    
+    // Преобразуем объект в массив уроков
+    if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+      // Если это объект с днями недели, преобразуем в массив
+      scheduleData.value = Object.values(response.data).flat();
+    } else {
+      scheduleData.value = response.data;
+    }
     
   } catch (err) {
     if (err.response?.status === 401) {
@@ -152,20 +159,19 @@ const getScheduleForDate = (date) => {
   const dateStr = formatDateYMD(date);
   
   return scheduleData.value.filter(lesson => {
-    const startDate = new Date(lesson.startDate);
-    const endDate = new Date(lesson.endDate);
-    
-    // Проверяем, попадает ли дата в диапазон урока
-    return date >= startDate && date <= endDate;
+    // Проверяем, есть ли дата в массиве dates урока
+    return lesson.dates && Array.isArray(lesson.dates) && lesson.dates.includes(dateStr);
   }).map(lesson => ({
     lesson_id: lesson.id,
-    dates: [formatDateYMD(new Date(lesson.startDate))],
+    dates: lesson.dates,
     subject_name: lesson.subject_name,
     teacher_name: lesson.teacher_name,
     start_time: formatTime(new Date('1970-01-01T' + lesson.startTime)),
     end_time: formatTime(new Date('1970-01-01T' + lesson.endTime)),
     repeat: lesson.repeat,
-    dayOfWeek: lesson.dayOfWeek
+    dayOfWeek: lesson.dayOfWeek,
+    room: lesson.room || '', // Добавляем поле room
+    description: lesson.description || '' // Добавляем поле description
   }));
 };
 
@@ -230,11 +236,12 @@ const addNewLesson = async (lessonData) => {
       teacher_name: lessonData.teacher_name,
       subject_name: lessonData.subject_name,
       startDate: formatDateYMD(addLessonDate.value),
-      endDate: formatDateYMD(addLessonDate.value),
+      endDate: lessonData.end_date || formatDateYMD(addLessonDate.value),
       startTime: lessonData.start_time + ':00',
       endTime: lessonData.end_time + ':00',
       repeat: lessonData.repeat || false,
-      dayOfWeek: getDayName(addLessonDate.value)
+      dayOfWeek: getDayName(addLessonDate.value),
+      room: lessonData.room || ''
     };
 
     await axios.post(`${API_BASE_URL}/add_lesson`, lessonPayload);
@@ -248,6 +255,7 @@ const addNewLesson = async (lessonData) => {
 };
 
 // Обновление урока
+// Обновление урока
 const updateLesson = async (updatedLesson) => {
   try {
     const lessonPayload = {
@@ -256,10 +264,16 @@ const updateLesson = async (updatedLesson) => {
       room: updatedLesson.room,
       startTime: updatedLesson.start_time + ':00',
       endTime: updatedLesson.end_time + ':00',
-      repeat: updatedLesson.repeat || false,
-      dayOfWeek: updatedLesson.dayOfWeek,
-      description: updatedLesson.description || ''
+      repeat: updatedLesson.repeat || 'none',
+      dayOfWeek: updatedLesson.dayOfWeek
     };
+
+    // Убираем пустые поля
+    Object.keys(lessonPayload).forEach(key => {
+      if (lessonPayload[key] === undefined || lessonPayload[key] === null) {
+        delete lessonPayload[key];
+      }
+    });
 
     await axios.put(
       `${API_BASE_URL}/edit_lesson/${selectedItem.value.lesson_id}`,
@@ -268,13 +282,18 @@ const updateLesson = async (updatedLesson) => {
     
     // Отправляем комментарий, если он не пустой
     if (updatedLesson.comment && updatedLesson.comment.trim() !== '') {
-      const commentPayload = {
-        lesson_id: selectedItem.value.lesson_id,
-        date: formatDateYMD(selectedDate.value),
-        comment: updatedLesson.comment.trim()
-      };
-      
-      await axios.put(`${API_BASE_URL}/edit_comment`, commentPayload);
+      try {
+        const commentPayload = {
+          lesson_id: selectedItem.value.lesson_id,
+          date: formatDateYMD(selectedDate.value),
+          comment: updatedLesson.comment.trim()
+        };
+        
+        await axios.put(`${API_BASE_URL}/edit_comment`, commentPayload);
+      } catch (commentErr) {
+        console.warn('Comment update failed:', commentErr);
+        // Продолжаем даже если комментарий не сохранился
+      }
     }
     
     await loadSchedule();
@@ -381,7 +400,6 @@ const deleteLesson = async () => {
   margin: 0 auto;
   padding: 30px 20px;
   min-height: 100vh;
-  background-color: #f5f5f5;
   font-family: "Chiron GoRound TC", sans-serif;
 }
 

@@ -35,40 +35,34 @@
 
 <script setup>
 import { computed } from 'vue';
-import { formatWeekday, isSameDay, getDayName, formatDateYMD } from '../../utils/dateUtils';
+import { formatWeekday, isSameDay, formatDateYMD } from '../../utils/dateUtils';
 
 const props = defineProps({
   currentDate: Date,
   weekDays: Array,
-  schedule: Object
+  schedule: {
+    type: Array,
+    default: () => []
+  }
 });
 
 const emit = defineEmits(['prev-week', 'next-week', 'day-select']);
 
+// Функция проверки наличия событий для даты
 const hasEvents = (date) => {
   try {
-    const dayName = getDayName(date);
+    if (!props.schedule || !Array.isArray(props.schedule)) {
+      return false;
+    }
+    
     const dateStr = formatDateYMD(date);
     
-    // ✅ Добавляем проверки на существование свойств
-    if (!props.schedule || !props.schedule[dayName]) {
-      return false;
-    }
-    
-    const daySchedule = props.schedule[dayName];
-    
-    // Проверяем, что daySchedule - массив
-    if (!Array.isArray(daySchedule)) {
-      return false;
-    }
-    
-    // Ищем события для этой даты с проверкой на существование dates
-    return daySchedule.some(item => {
-      // Проверяем, что item существует и имеет свойство dates
-      if (!item || !item.dates || !Array.isArray(item.dates)) {
+    // Проверяем, есть ли уроки на эту дату
+    return props.schedule.some(lesson => {
+      if (!lesson || !lesson.dates || !Array.isArray(lesson.dates)) {
         return false;
       }
-      return item.dates.includes(dateStr);
+      return lesson.dates.includes(dateStr);
     });
     
   } catch (error) {

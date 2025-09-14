@@ -60,6 +60,17 @@
         </div>
       </div>
 
+      <div class="form-group date-group">
+        <label class="span-input">Дата окончания:</label>
+        <div class="date-inputs">
+          <input 
+            v-model="newLesson.end_date" 
+            type="date" 
+            class="registr-input date-input"
+          >
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="span-input">Повторение занятия:</label>
         <select v-model="newLesson.repeat" class="registr-input">
@@ -101,6 +112,7 @@ const newLesson = reactive({
   room: '',
   start_time: '09:00',
   end_time: '10:30',
+  end_date: '',
   repeat: 'none',
   comment: '',
   dates: []
@@ -133,6 +145,7 @@ const saveLesson = () => {
     room: newLesson.room,
     start_time: newLesson.start_time,
     end_time: newLesson.end_time,
+    end_date: newLesson.end_date, // Добавьте это
     repeat: newLesson.repeat,
     comment: newLesson.comment,
     dates: [formatDateYMD(props.date)]
@@ -141,7 +154,7 @@ const saveLesson = () => {
   // Добавляем повторяющиеся даты если нужно
   if (newLesson.repeat !== 'none') {
     const weeks = newLesson.repeat === 'weekly' ? 1 : 2;
-    for (let i = 1; i <= 4; i++) { // 4 повторения
+    for (let i = 1; i <= 4; i++) {
       const nextDate = new Date(props.date);
       nextDate.setDate(nextDate.getDate() + (i * 7 * weeks));
       lessonData.dates.push(formatDateYMD(nextDate));
@@ -155,32 +168,7 @@ const saveLesson = () => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 20px;
-  font-family: "Chiron GoRound TC", sans-serif;
-}
 
-.modal-content {
-  background-color: #D3C5E5;
-  border-radius: 15px;
-  padding: 30px;
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
 
 .modal-close {
   position: absolute;
@@ -249,7 +237,6 @@ const saveLesson = () => {
   min-height: 80px;
 }
 
-/* Стили для времени */
 .time-group {
   margin-bottom: 25px;
 }
@@ -317,9 +304,38 @@ const saveLesson = () => {
   opacity: 0.6;
   cursor: not-allowed;
 }
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
 
+.modal-content {
+  position: relative;
+  background-color: #D3C5E5;
+  border-radius: 15px;
+  padding: 30px;
+  max-width: 50%;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin: 0 auto; /* Центрирование */
+  
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
 @media (max-width: 768px) {
   .modal-content {
+    
     margin: 10px;
     padding: 25px;
   }
@@ -349,5 +365,15 @@ const saveLesson = () => {
   .time-separator {
     margin: 5px 0;
   }
+}
+.date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-input {
+  flex: 1;
+  text-align: center;
 }
 </style>

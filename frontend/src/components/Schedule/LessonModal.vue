@@ -57,6 +57,17 @@
         </div>
       </div>
 
+      <div class="form-group date-group">
+        <label class="span-input">Дата окончания:</label>
+        <div class="date-inputs">
+          <input 
+            v-model="editedLesson.end_date" 
+            type="date" 
+            class="registr-input date-input"
+          >
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="span-input">Описание занятия:</label>
         <textarea 
@@ -65,31 +76,6 @@
           class="registr-input textarea"
           rows="4"
         ></textarea>
-      </div>
-
-      <!-- Поле для нового комментария -->
-      <div class="form-group">
-        <label class="span-input">Комментарий на {{ formatCommentDate(currentDate) }}:</label>
-        <textarea 
-          v-model="editedLesson.new_comment" 
-          placeholder="Введите комментарий для этой даты..."
-          class="registr-input textarea"
-          rows="3"
-        ></textarea>
-      </div>
-
-      <!-- Блок существующих комментариев -->
-      <div class="form-group" v-if="comments.length > 0">
-        <label class="span-input">Предыдущие комментарии:</label>
-        <div class="comments-section">
-          <div 
-            v-for="(comment, index) in comments" 
-            :key="index"
-            class="comment-item"
-          >
-            <strong>{{ formatCommentDate(comment.date) }}:</strong> {{ comment.comment }}
-          </div>
-        </div>
       </div>
 
       <div class="modal-actions">
@@ -118,7 +104,10 @@ import { formatDate, formatDateYMD } from '../../utils/dateUtils';
 const props = defineProps({
   lesson: Object,
   date: Date,
-  comments: Array
+  comments: {
+    type: Array,
+    default: () => []
+  }
 });
 
 const emit = defineEmits(['close', 'delete', 'save']);
@@ -131,9 +120,12 @@ const editedLesson = reactive({
   room: '',
   start_time: '09:00',
   end_time: '10:30',
+  start_date: '',
+  end_date: '',
   description: '',
-  new_comment: '', // Добавляем поле для нового комментария
-  dayOfWeek: '' // Добавляем день недели
+  new_comment: '',
+  dayOfWeek: '',
+  repeat: 'none'
 });
 
 // Инициализация формы при открытии модального окна
@@ -145,10 +137,21 @@ watch(() => props.lesson, (newLesson) => {
       room: newLesson.room || '',
       start_time: newLesson.start_time || '09:00',
       end_time: newLesson.end_time || '10:30',
+      start_date: newLesson.start_date || '',
+      end_date: newLesson.end_date || '',
       description: newLesson.description || '',
       dayOfWeek: newLesson.dayOfWeek || '',
+      repeat: newLesson.repeat || 'none',
       new_comment: '' // Сбрасываем комментарий при каждом открытии
     });
+    
+    // Если время в формате HH:MM:SS, обрезаем секунды
+    if (editedLesson.start_time && editedLesson.start_time.includes(':')) {
+      editedLesson.start_time = editedLesson.start_time.substring(0, 5);
+    }
+    if (editedLesson.end_time && editedLesson.end_time.includes(':')) {
+      editedLesson.end_time = editedLesson.end_time.substring(0, 5);
+    }
   }
 }, { immediate: true });
 
@@ -162,6 +165,9 @@ const formattedDate = computed(() => {
 });
 
 const formatCommentDate = (dateObj) => {
+  if (typeof dateObj === 'string') {
+    dateObj = new Date(dateObj);
+  }
   return formatDate(dateObj, { 
     day: 'numeric', 
     month: 'long',
@@ -192,7 +198,194 @@ const saveChanges = () => {
 </script>
 
 <style scoped>
-/* Стили остаются без изменений, только добавляем для нового комментария */
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+  font-family: "Chiron GoRound TC", sans-serif;
+}
+
+.modal-content {
+  position: relative;
+  background-color: #D3C5E5;
+  border-radius: 15px;
+  padding: 30px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: background-color 0.3s;
+  color: #4a2d7c;
+}
+
+.modal-close:hover {
+  background: rgba(74, 45, 124, 0.1);
+}
+
+.modal-content h2 {
+  color: #4a2d7c;
+  margin-bottom: 15px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.modal-subtitle {
+  color: #5d4b7a;
+  margin-bottom: 25px;
+  font-size: 16px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.span-input {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #4a2d7c;
+  font-weight: 600;
+  display: block;
+}
+
+.registr-input {
+  padding: 12px 15px;
+  width: 100%;
+  border: 2px solid #9f8cb9;
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: "Chiron GoRound TC", sans-serif;
+  transition: border-color 0.3s;
+  background: white;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.registr-input:focus {
+  outline: none;
+  border-color: #4a2d7c;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.time-group {
+  margin-bottom: 25px;
+}
+
+.time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-input {
+  flex: 1;
+  text-align: center;
+}
+
+.time-separator {
+  color: #5d4b7a;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-input {
+  flex: 1;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: flex-end;
+  margin-top: 25px;
+}
+
+.action-button {
+  padding: 12px 25px;
+  border: 2px solid #4a2d7c;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: "Chiron GoRound TC", sans-serif;
+  font-weight: 600;
+  transition: all 0.3s;
+  background: white;
+  color: #4a2d7c;
+}
+
+.action-button:hover {
+  background: #4a2d7c;
+  color: white;
+}
+
+.action-button.danger {
+  background-color: #ff4757;
+  color: white;
+  border: none;
+}
+
+.action-button.danger:hover {
+  background-color: #ff3742;
+}
+
+.submit-button {
+  background-color: #4a2d7c;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: "Chiron GoRound TC", sans-serif;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.submit-button:hover:not(:disabled) {
+  background-color: #3a225f;
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .comments-section {
   max-height: 200px;
   overflow-y: auto;
@@ -211,5 +404,43 @@ const saveChanges = () => {
 
 .comment-item:last-child {
   margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    margin: 10px;
+    padding: 25px;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .action-button, .submit-button {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .modal-content h2 {
+    font-size: 22px;
+  }
+  
+  .modal-subtitle {
+    font-size: 14px;
+  }
+
+  .time-inputs {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .time-separator {
+    margin: 5px 0;
+  }
+
+  .date-inputs {
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 </style>
