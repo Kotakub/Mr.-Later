@@ -110,7 +110,7 @@ export default {
         console.log('Успешный вход:', data);
         
         // Перенаправляем на страницу расписания
-        router.push('/schedule');
+        router.push(`/schedule/${data.user.login}`);
         
       } catch (error) {
         console.error('Ошибка входа:', error);

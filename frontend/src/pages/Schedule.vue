@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute  } from 'vue-router';
 import axios from 'axios';
 import WeekNavigation from '../components/Schedule/WeekNavigation.vue';
 import ScheduleDay from '../components/Schedule/ScheduleDay.vue';
@@ -27,7 +27,9 @@ const selectedDate = ref(null);
 const addLessonDate = ref(null);
 const isLoading = ref(false);
 const error = ref(null);
-
+const isViewingOwnSchedule = ref(true);
+const saveButtonVisible = ref(false);
+const route = useRoute();
 // Данные с бэкенда
 const scheduleData = ref([]);
 
@@ -64,6 +66,70 @@ const getCurrentUserFromToken = () => {
     return null;
   }
 };
+
+// Функция для проверки, смотрим ли мы свое расписание
+const checkScheduleOwnership = () => {
+  
+  const viewedLogin = route.params.login;
+  
+  if (viewedLogin && currentUser.value) {
+    isViewingOwnSchedule.value = viewedLogin === currentUser.value.login;
+    saveButtonVisible.value = !isViewingOwnSchedule.value;
+  } else {
+    isViewingOwnSchedule.value = true;
+    saveButtonVisible.value = false;
+  }
+};
+
+// Функция для сохранения чужого расписания
+const saveOtherSchedule = async () => {
+  try {
+    const viewedLogin = route.params.login;
+    
+    if (!currentUser.value || !viewedLogin) return;
+    
+    const saveData = {
+      my_login: currentUser.value.login,
+      save_login: viewedLogin
+    };
+    
+    const response = await axios.patch(`${API_BASE_URL}/save_schedule`, saveData);
+    
+    // Показываем уведомление об успехе
+    alert(`Расписание успешно сохранено!`);
+    
+    // Перезагружаем свое расписание
+    // await loadSchedule();
+    router.push(`/schedule/${currentUser.value.login}`);
+    
+    } catch (err) {
+      error.value = 'Ошибка сохранения расписания';
+      console.error('Error saving schedule:', err);
+    }
+};
+
+// Наблюдаем за изменениями маршрута
+watch(() => router.currentRoute.value.params, () => {
+  checkScheduleOwnership();
+  if (currentUser.value) {
+    loadSchedule();
+  }
+});
+
+// Проверяем при монтировании и после загрузки пользователя
+onMounted(async () => {
+  await getCurrentUserInfo();
+  if (currentUser.value) {
+    checkScheduleOwnership();
+    await loadSchedule();
+  }
+});
+
+watch(currentUser, () => {
+  if (currentUser.value) {
+    checkScheduleOwnership();
+  }
+});
 
 // Функция для получения полной информации о пользователе
 const getCurrentUserInfo = async () => {
@@ -108,9 +174,10 @@ const loadSchedule = async () => {
   try {
     isLoading.value = true;
     error.value = null;
-    
+    const viewedLogin = route.params.login;
+
     const response = await axios.get(
-      `${API_BASE_URL}/get_schedule/${currentUser.value.login}`
+      `${API_BASE_URL}/get_schedule/${viewedLogin}`
     );
     
     // Преобразуем объект в массив уроков
@@ -255,7 +322,6 @@ const addNewLesson = async (lessonData) => {
 };
 
 // Обновление урока
-// Обновление урока
 const updateLesson = async (updatedLesson) => {
   try {
     const lessonPayload = {
@@ -390,6 +456,13 @@ const deleteLesson = async () => {
         @save="addNewLesson"
       />
     </div>
+     <button 
+      v-if="saveButtonVisible" 
+      class="save-schedule-button"
+      @click="saveOtherSchedule"
+    >
+      Сохранить расписание
+    </button>
   </div>
 </template>
 
@@ -444,6 +517,47 @@ const deleteLesson = async () => {
   .title {
     font-size: 28px;
     margin-bottom: 25px;
+  }
+}
+.schedule-info {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #f0e6ff;
+  border-radius: 8px;
+  color: #4a2d7c;
+}
+
+.save-schedule-button {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  padding: 45px 75px;
+  background-color: #4a2d7c;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: "Chiron GoRound TC", sans-serif;
+  font-weight: 600;
+  font-size: 100%;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.save-schedule-button:hover {
+  background-color: #3a225f;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .save-schedule-button {
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    font-size: 14px;
   }
 }
 </style>

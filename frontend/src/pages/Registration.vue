@@ -156,7 +156,7 @@ export default {
         console.log('Успешная регистрация:', data);
         
         // Перенаправляем на страницу расписания
-        router.push('/schedule');
+        router.push(`/schedule/${data.user.login}`);
         
     } catch (error) {
         console.error('Ошибка регистрации:', error);

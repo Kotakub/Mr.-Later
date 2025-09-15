@@ -6,18 +6,19 @@ const router = createRouter({
     {
       path: '/authorization',
       name: 'authorization',
-      component: () => import('../pages/Auth.vue')
+      component: () => import('../pages/Auth.vue'),
     },
     {
       path: '/registration',
       name: 'registration',
-      component: () => import('../pages/Registration.vue')
+      component: () => import('../pages/Registration.vue'),
     },
     {
-      path: '/schedule',
-      name: 'schedule',
-      component: () => import('../pages/Schedule.vue')
-    },
+      path: '/schedule/:login',
+      name: 'Schedule',
+      component: () => import('../pages/Schedule.vue'),
+      meta: { requiresAuth: true }
+    }
   ],
 })
 
