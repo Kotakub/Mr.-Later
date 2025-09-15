@@ -6,6 +6,7 @@ import WeekNavigation from '../components/Schedule/WeekNavigation.vue';
 import ScheduleDay from '../components/Schedule/ScheduleDay.vue';
 import LessonModal from '../components/Schedule/LessonModal.vue';
 import AddLessonModal from '../components/Schedule/AddLessonModal.vue';
+import Navigation from '../components/Schedule/Navigation.vue';
 import { 
   getMonday, 
   formatDate, 
@@ -30,12 +31,20 @@ const error = ref(null);
 const isViewingOwnSchedule = ref(true);
 const saveButtonVisible = ref(false);
 const route = useRoute();
+
 // Данные с бэкенда
 const scheduleData = ref([]);
 
 // Текущий пользователь
 const currentUser = ref(null);
 const isLoadingUser = ref(true);
+
+// Функция для выхода из аккаунта
+const handleLogout = () => {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('user_data');
+  router.push('/authorization');
+};
 
 // Функция для получения информации о пользователе из токена
 const getCurrentUserFromToken = () => {
@@ -166,6 +175,30 @@ const weekDays = computed(() => {
   }
   return days;
 });
+
+// Обработка отметки посещения
+const handleAttendanceToggle = async (attendanceData) => {
+  try {
+    const { lesson, date, attended } = attendanceData;
+    
+    // Отправляем запрос на сервер для сохранения отметки посещения
+    const attendancePayload = {
+      lesson_id: lesson.lesson_id,
+      date: formatDateYMD(date),
+      attended: attended,
+      user_login: currentUser.value.login
+    };
+
+    await axios.post(`${API_BASE_URL}/attendance`, attendancePayload);
+    
+    // Обновляем локальное состояние если нужно
+    console.log(`Посещение отмечено: ${attended ? 'присутствовал' : 'отсутствовал'}`);
+    
+  } catch (err) {
+    console.error('Error saving attendance:', err);
+    // Можно показать уведомление об ошибке
+  }
+};
 
 // Загрузка расписания
 const loadSchedule = async () => {
@@ -389,91 +422,103 @@ const deleteLesson = async () => {
 
 <template>
   <div class="schedule-app">
-    <h1 class="title">Расписание занятий</h1>
+    <!-- Добавляем навигационную панель -->
+    <Navigation 
+      :user="currentUser" 
+      @logout="handleLogout" 
+    />
     
-    <!-- Индикатор загрузки -->
-    <div v-if="isLoadingUser" class="loading">Загрузка информации о пользователе...</div>
-    <div v-else-if="isLoading" class="loading">Загрузка расписания...</div>
-    
-    <!-- Сообщение об ошибке -->
-    <div v-if="error" class="error">{{ error }}</div>
-    
-    <div v-if="currentUser && !isLoading">
-      <WeekNavigation
-        :current-date="currentDate"
-        :week-days="weekDays"
-        :schedule="scheduleData"
-        @prev-week="changeWeek(-1)"
-        @next-week="changeWeek(1)"
-        @day-select="currentDate = $event"
-      />
+    <div class="schedule-content">
+      <h1 class="title">Расписание занятий</h1>
       
-      <div class="schedule-container">
-        <ScheduleDay
-          :title="formatDate(prevDate)"
-          :items="getScheduleForDate(prevDate)"
-          day-type="prev-day"
-          :clickable="true"
-          :show-add-button="false"
-          @day-click="changeDay(-1)"
-          @item-click="openModal($event, prevDate)"
+      <!-- Индикатор загрузки -->
+      <div v-if="isLoadingUser" class="loading">Загрузка информации о пользователе...</div>
+      <div v-else-if="isLoading" class="loading">Загрузка расписания...</div>
+      
+      <!-- Сообщение об ошибке -->
+      <div v-if="error" class="error">{{ error }}</div>
+      
+      <div v-if="currentUser && !isLoading">
+        <WeekNavigation
+          :current-date="currentDate"
+          :week-days="weekDays"
+          :schedule="scheduleData"
+          @prev-week="changeWeek(-1)"
+          @next-week="changeWeek(1)"
+          @day-select="currentDate = $event"
+        />
+        
+        <div class="schedule-container">
+          <ScheduleDay
+            :title="formatDate(prevDate)"
+            :items="getScheduleForDate(prevDate)"
+            day-type="prev-day"
+            :clickable="true"
+            :show-add-button="false"
+            @day-click="changeDay(-1)"
+            @item-click="openModal($event, prevDate)"
+          />
+
+          <ScheduleDay
+            :title="formatDate(currentDate)"
+            :items="getScheduleForDate(currentDate)"
+            day-type="current-day"
+            :show-add-button="true"
+            @item-click="openModal($event, currentDate)"
+            @add-click="openAddLessonModal(currentDate)"
+          />
+
+          <ScheduleDay
+            :title="formatDate(nextDate)"
+            :items="getScheduleForDate(nextDate)"
+            day-type="next-day"
+            :clickable="true"
+            :show-add-button="false"
+            @day-click="changeDay(1)"
+            @item-click="openModal($event, nextDate)"
+          />
+        </div>
+
+        <LessonModal
+          v-if="isModalOpen"
+          :lesson="selectedItem"
+          :date="selectedDate"
+          :comments="[]"
+          @close="closeModal"
+          @delete="deleteLesson"
+          @save="updateLesson"
         />
 
-        <ScheduleDay
-          :title="formatDate(currentDate)"
-          :items="getScheduleForDate(currentDate)"
-          day-type="current-day"
-          :show-add-button="true"
-          @item-click="openModal($event, currentDate)"
-          @add-click="openAddLessonModal(currentDate)"
-        />
-
-        <ScheduleDay
-          :title="formatDate(nextDate)"
-          :items="getScheduleForDate(nextDate)"
-          day-type="next-day"
-          :clickable="true"
-          :show-add-button="false"
-          @day-click="changeDay(1)"
-          @item-click="openModal($event, nextDate)"
+        <AddLessonModal
+          v-if="isAddModalOpen"
+          :date="addLessonDate"
+          @close="closeAddModal"
+          @save="addNewLesson"
         />
       </div>
-
-      <LessonModal
-        v-if="isModalOpen"
-        :lesson="selectedItem"
-        :date="selectedDate"
-        :comments="[]"
-        @close="closeModal"
-        @delete="deleteLesson"
-        @save="updateLesson"
-      />
-
-      <AddLessonModal
-        v-if="isAddModalOpen"
-        :date="addLessonDate"
-        @close="closeAddModal"
-        @save="addNewLesson"
-      />
+      
+      <button 
+        v-if="saveButtonVisible" 
+        class="save-schedule-button"
+        @click="saveOtherSchedule"
+      >
+        Сохранить расписание
+      </button>
     </div>
-     <button 
-      v-if="saveButtonVisible" 
-      class="save-schedule-button"
-      @click="saveOtherSchedule"
-    >
-      Сохранить расписание
-    </button>
   </div>
 </template>
 
 <style scoped>
-/* Стили остаются без изменений */
 .schedule-app {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 30px 20px;
   min-height: 100vh;
   font-family: "Chiron GoRound TC", sans-serif;
+}
+
+.schedule-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 100px 20px 30px; /* Увеличиваем верхний отступ для панели */
+  box-sizing: border-box;
 }
 
 .title {
@@ -508,26 +553,6 @@ const deleteLesson = async () => {
   margin-bottom: 20px;
 }
 
-@media (max-width: 768px) {
-  .schedule-container {
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .title {
-    font-size: 28px;
-    margin-bottom: 25px;
-  }
-}
-.schedule-info {
-  text-align: center;
-  margin-bottom: 20px;
-  padding: 10px;
-  background-color: #f0e6ff;
-  border-radius: 8px;
-  color: #4a2d7c;
-}
-
 .save-schedule-button {
   position: fixed;
   bottom: 30px;
@@ -553,6 +578,20 @@ const deleteLesson = async () => {
 }
 
 @media (max-width: 768px) {
+  .schedule-content {
+    padding: 90px 15px 20px; /* Адаптивный отступ */
+  }
+  
+  .schedule-container {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .title {
+    font-size: 28px;
+    margin-bottom: 25px;
+  }
+  
   .save-schedule-button {
     bottom: 20px;
     right: 20px;

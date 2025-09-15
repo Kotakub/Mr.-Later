@@ -11,7 +11,10 @@
         :key="`${item.subject_name}-${item.teacher_name}-${index}`"
         :item="item"
         :has-comments="hasCommentsForItem(item)"
+        :show-attendance-button="showAttendanceButton"
+        :current-date="currentDate"
         @item-click="$emit('item-click', item)"
+        @attendance-toggle="$emit('attendance-toggle', $event)"
       />
       
       <AddLessonButton 
@@ -47,16 +50,25 @@ const props = defineProps({
   showAddButton: {
     type: Boolean,
     default: false
+  },
+  showAttendanceButton: {
+    type: Boolean,
+    default: true
+  },
+  currentDate: {
+    type: Date,
+    default: () => new Date()
   }
 });
 
-defineEmits(['day-click', 'item-click', 'add-click']);
+defineEmits(['day-click', 'item-click', 'add-click', 'attendance-toggle']);
 
 // Заглушка для проверки комментариев
 const hasCommentsForItem = (item) => {
   return false;
 };
 </script>
+
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=Playpen+Sans:wght@100..800&family=Stick&display=swap');

@@ -198,7 +198,7 @@ export default {
     align-items: center;
     min-height: 100vh;
     background-color: #f5f5f5;
-    font-family: "Stick", sans-serif;
+    font-family:  "Chiron GoRound TC", sans-serif;
 }
 
 .auth-window {
@@ -231,7 +231,7 @@ export default {
     border: 2px solid #ddd;
     border-radius: 8px;
     font-size: 16px;
-    font-family: "Stick", sans-serif;
+    font-family:  "Chiron GoRound TC", sans-serif;
     transition: border-color 0.3s;
 }
 
@@ -278,7 +278,7 @@ export default {
     border-radius: 8px;
     font-size: 16px;
     font-weight: 600;
-    font-family: "Stick", sans-serif;
+    font-family:  "Chiron GoRound TC", sans-serif;
     cursor: pointer;
     transition: background-color 0.3s;
 }
