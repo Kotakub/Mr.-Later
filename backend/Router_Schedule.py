@@ -1,18 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update, select
-from typing import List, Dict, Any
-import json
-from datetime import date, time
-
-from database_ORM import (
-    get_user_by_login,
-    get_lessons_by_user,
-    add_new_lesson,
-    update_lesson,
-    get_comments_by_lesson,
-    delete_lesson_by_id,
-)
+from datetime import date, time, timedelta
+from database_ORM import *
 from database_main import get_async_session
 from models import Lessons
 
@@ -30,22 +20,55 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
     lessons = await get_lessons_by_user(db, user.id)
 
     # Конвертируем объекты в словари для JSON сериализации
-    lessons_data = []
+    lessons_data = {
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "saturday": [],
+        "sunday": [],
+        "comments": [],
+    }
     for lesson in lessons:
-        lesson_dict = {
-            "id": lesson.id,
-            "user_id": lesson.user_id,
-            "teacher_name": lesson.teacher_name,
-            "subject_name": lesson.subject_name,
-            "startDate": lesson.startDate.isoformat(),
-            "endDate": lesson.endDate.isoformat(),
-            "startTime": lesson.startTime.isoformat(),
-            "endTime": lesson.endTime.isoformat(),
-            "repeat": lesson.repeat,
-            "dayOfWeek": lesson.dayOfWeek,
-        }
-        lessons_data.append(lesson_dict)
+        dates = []
+        current_date = lesson.startDate
+        end_date = lesson.endDate
 
+        while current_date <= end_date:
+            dates.append(current_date.isoformat())
+            if lesson.repeat == "weekly":
+                current_date += timedelta(weeks=1)
+            elif lesson.repeat == "biweekly":
+                current_date += timedelta(weeks=2)
+            else:
+                break
+
+        lessons_data[lesson.dayOfWeek].append(
+            {
+                "id": lesson.id,
+                "user_id": lesson.user_id,
+                "teacher_name": lesson.teacher_name,
+                "subject_name": lesson.subject_name,
+                "startDate": lesson.startDate.isoformat(),
+                "endDate": lesson.endDate.isoformat(),
+                "startTime": lesson.startTime.isoformat(),
+                "endTime": lesson.endTime.isoformat(),
+                "repeat": lesson.repeat,
+                "dayOfWeek": lesson.dayOfWeek,
+                "dates": dates,
+            }
+        )
+        comments = await get_comments_by_lesson(db, lesson.id)
+        for comment in comments:
+            lessons_data["comments"].append(
+                {
+                    "lesson_id": comment.lesson_id,
+                    "date": comment.lesson_date.isoformat(),
+                    "comment": comment.text,
+                }
+            )
+    print(lessons_data)
     return lessons_data
 
 
@@ -134,8 +157,7 @@ async def edit_lesson(
         json_data = await request.json()
 
         # Проверяем существование урока
-        result = await db.execute(select(Lessons).where(Lessons.id == lesson_id))
-        lesson = result.scalar_one_or_none()
+        lesson = get_lessons_by_id(db, lesson_id)
 
         if not lesson:
             raise HTTPException(
@@ -203,6 +225,29 @@ async def edit_lesson(
         )
 
 
+@router.put("/edit_comment")
+async def edit_comment(request: Request, db: AsyncSession = Depends(get_async_session)):
+    try:
+        # Получаем JSON из тела запроса
+        comment_data = await request.json()
+        comment = get_comments_by_lesson_and_date(
+            db, comment_data["lesson_id"], comment_data["lesson_date"]
+        )
+        if not comment:
+            add_new_comment(db, comment_data)
+        elif comment_data["comment"]:
+            update_comment(db, comment_data)
+        else:
+            delete_comment(db, comment_data["lesson_id"], comment_data["lesson_date"])
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cant edit comment",
+        )
+    return
+
+
 @router.delete("/delete_lesson/{lesson_id}")
 async def delete_lesson(lesson_id: int, db: AsyncSession = Depends(get_async_session)):
     try:
@@ -219,3 +264,8 @@ async def delete_lesson(lesson_id: int, db: AsyncSession = Depends(get_async_ses
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error deleting lesson: {str(e)}",
         )
+
+
+@router.patch("/save_schedule")
+async def save_schedule(db: AsyncSession = Depends(get_async_session)):
+    return

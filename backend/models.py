@@ -46,8 +46,8 @@ class Lessons(Base):
     startTime: Mapped[time] = mapped_column(Time)
     endTime: Mapped[time] = mapped_column(Time)
 
-    repeat: Mapped[int]
-    dayOfWeek: Mapped[int]
+    repeat: Mapped[str]
+    dayOfWeek: Mapped[str]
 
     user: Mapped["Users"] = relationship(back_populates="lessons")
     comments: Mapped[list["Comments"]] = relationship(back_populates="lesson")

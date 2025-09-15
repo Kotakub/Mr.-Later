@@ -17,7 +17,7 @@ const router = createRouter({
       path: '/schedule/:login',
       name: 'Schedule',
       component: () => import('../pages/Schedule.vue'),
-      meta: { requiresAuth: false }
+      
     }
   ],
 })

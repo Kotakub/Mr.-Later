@@ -184,9 +184,7 @@ const handleAttendanceToggle = async (attendanceData) => {
     // Отправляем запрос на сервер для сохранения отметки посещения
     const attendancePayload = {
       lesson_id: lesson.lesson_id,
-      date: formatDateYMD(date),
-      attended: attended,
-      user_login: currentUser.value.login
+      date: formatDateYMD(date)
     };
 
     await axios.post(`${API_BASE_URL}/attendance`, attendancePayload);

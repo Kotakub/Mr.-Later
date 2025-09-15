@@ -37,11 +37,9 @@ async def get_lessons_by_user(db: AsyncSession, user_id: int):
         raise e
 
 
-async def get_comments_by_lesson(db: AsyncSession, lesson_id: int):
+async def get_lessons_by_id(db: AsyncSession, lesson_id: int):
     try:
-        result = await db.execute(
-            select(Comments).where(Comments.lesson_id == lesson_id)
-        )
+        result = await db.execute(select(Lessons).where(Lessons.id == lesson_id))
         return result.scalars().all()
 
     except SQLAlchemyError as e:
@@ -79,19 +77,6 @@ async def update_lesson(db: AsyncSession, lesson_data: dict):
         raise e
 
 
-async def get_comments_by_lesson(db: AsyncSession, lesson_id: int):
-    try:
-        result = await db.execute(
-            select(Comments).where(Comments.lesson_id == lesson_id)
-        )
-        return result.scalars().all()
-
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise e
-    return
-
-
 async def delete_lesson_by_id(db: AsyncSession, lesson_id: int) -> bool:
     try:
 
@@ -102,6 +87,87 @@ async def delete_lesson_by_id(db: AsyncSession, lesson_id: int) -> bool:
             return False
 
         await db.execute(delete(Lessons).where(Lessons.id == lesson_id))
+        await db.commit()
+
+        return True
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def get_comments_by_lesson(db: AsyncSession, lesson_id: int):
+    try:
+        result = await db.execute(
+            select(Comments).where(Comments.lesson_id == lesson_id)
+        )
+        return result.scalars().all()
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def get_comments_by_lesson_and_date(
+    db: AsyncSession, lesson_id: int, lesson_date
+):
+    try:
+        result = await db.execute(
+            select(Comments)
+            .where(Comments.lesson_id == lesson_id)
+            .where(Comments.lesson_date == lesson_date)
+        )
+        return result.scalars().all()
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def add_new_comment(db: AsyncSession, comment_data: dict):
+    new_comment = Comments(**comment_data)
+    try:
+        db.add(new_comment)
+        await db.commit()
+        await db.refresh(new_comment)
+        return new_comment
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def update_comment(db: AsyncSession, comment_data: dict):
+    updated_comment = comment_data
+    try:
+        await db.execute(
+            update(Comments)
+            .where(Comments.lesson_id == updated_comment["lesson_id"])
+            .where(Comments.lesson_date == updated_comment["lesson_date"])
+            .values(**updated_comment)
+            .returning(Comments)
+        )
+        await db.commit()
+        return
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def delete_comment(db: AsyncSession, lesson_id: int, lesson_date) -> bool:
+    try:
+
+        comment = get_comments_by_lesson_and_date(db, lesson_id, lesson_date)
+
+        if not comment:
+            return False
+
+        await db.execute(
+            delete(Comments)
+            .where(Comments.lesson_id == lesson_id)
+            .where(Comments.lesson_date == lesson_date)
+        )
         await db.commit()
 
         return True
