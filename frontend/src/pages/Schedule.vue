@@ -440,7 +440,7 @@ const updateLesson = async (updatedLesson) => {
 const deleteLesson = async () => {
   try {
     await axios.delete(
-      `${API_BASE_URL}/delete_lesson/${selectedItem.value.lesson_id}`
+      `${API_BASE_URL}/delete_lesson/${selectedItem.value.id}`
     );
     await loadSchedule();
     closeModal();

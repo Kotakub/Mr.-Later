@@ -309,10 +309,47 @@ async def save_schedule(
         # Получаем JSON из тела запроса
         save_data = await request.json()
 
+        user_me = await get_user_by_login(db, save_data["my_login"])
+        user_save = await get_user_by_login(db, save_data["save_login"])
+
+        if not user_save:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
+        delete_lessons = await get_lessons_by_user(db, user_me.id)
+        if delete_lessons:
+            for lesson in delete_lessons:
+                await delete_lesson_by_id(db, lesson.id)
+
+        save_lessons = await get_lessons_by_user(db, user_save.id)
+        if not save_lessons:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lessons for save not found",
+            )
+        else:
+            for lesson in save_lessons:
+                lesson_data = {
+                    "user_id": user_me.id,
+                    "teacher_name": lesson.teacher_name,
+                    "subject_name": lesson.subject_name,
+                    "room": lesson.room,
+                    "startDate": lesson.startDate,
+                    "endDate": lesson.endDate,
+                    "startTime": lesson.startTime,
+                    "endTime": lesson.endTime,
+                    "repeat": lesson.repeat,
+                    "dayOfWeek": lesson.dayOfWeek,
+                }
+                await add_new_lesson(db, lesson_data)
+
+        return {"message": "Schedule saved successfully"}
+
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cant save schedule",
+            detail=f"Cant save schedule: {str(e)}",
         )
     return
 

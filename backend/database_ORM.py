@@ -79,13 +79,8 @@ async def update_lesson(db: AsyncSession, lesson_data: dict):
 
 async def delete_lesson_by_id(db: AsyncSession, lesson_id: int) -> bool:
     try:
-
-        result = await db.execute(select(Lessons).where(Lessons.id == lesson_id))
-        lesson = result.scalar_one_or_none()
-
-        if not lesson:
-            return False
-
+        await db.execute(delete(Comments).where(Comments.lesson_id == lesson_id))
+        await db.execute(delete(Attendance).where(Attendance.lesson_id == lesson_id))
         await db.execute(delete(Lessons).where(Lessons.id == lesson_id))
         await db.commit()
 
