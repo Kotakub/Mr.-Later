@@ -139,7 +139,7 @@ watch(() => props.lesson, (newLesson) => {
       description: newLesson.description || '',
       dayOfWeek: newLesson.dayOfWeek || '',
       repeat: newLesson.repeat || 'none',
-      description: ''
+      description: newLesson.description || '',
     });
     
     // Форматирование времени

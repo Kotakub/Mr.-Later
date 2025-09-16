@@ -34,6 +34,7 @@ const route = useRoute();
 
 // Данные с бэкенда
 const scheduleData = ref([]);
+const commentsData = ref([]);
 
 // Текущий пользователь
 const currentUser = ref(null);
@@ -218,7 +219,11 @@ const loadSchedule = async () => {
       `${API_BASE_URL}/get_schedule/${viewedLogin}`,
       config
     );
-    
+    if (response.data && response.data.comments) {
+      commentsData.value = response.data.comments;
+      delete response.data.comments;
+    }
+
     if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
       scheduleData.value = Object.values(response.data).flat();
     } else {
@@ -252,21 +257,27 @@ const getScheduleForDate = (date) => {
   
   return scheduleData.value.filter(lesson => {
     return lesson.dates && Array.isArray(lesson.dates) && lesson.dates.includes(dateStr);
-  }).map(lesson => ({
-    id: lesson.id,
-    dates: lesson.dates,
-    attendances: lesson.attendances || [],
-    subject_name: lesson.subject_name,
-    teacher_name: lesson.teacher_name,
-    start_time: formatTime(new Date('1970-01-01T' + lesson.startTime)),
-    end_time: formatTime(new Date('1970-01-01T' + lesson.endTime)),
-    start_date: lesson.startDate,
-    end_date: lesson.endDate,
-    repeat: lesson.repeat,
-    dayOfWeek: lesson.dayOfWeek,
-    room: lesson.room || '',
-    description: lesson.description || ''
-  }));
+  }).map(lesson => {
+    const comment = commentsData.value.find(c => 
+      c.lesson_id === lesson.id && c.lesson_date === dateStr
+    );
+    
+    return {
+      id: lesson.id,
+      dates: lesson.dates,
+      attendances: lesson.attendances || [],
+      subject_name: lesson.subject_name,
+      teacher_name: lesson.teacher_name,
+      start_time: formatTime(new Date('1970-01-01T' + lesson.startTime)),
+      end_time: formatTime(new Date('1970-01-01T' + lesson.endTime)),
+      start_date: lesson.startDate,
+      end_date: lesson.endDate,
+      repeat: lesson.repeat,
+      dayOfWeek: lesson.dayOfWeek,
+      room: lesson.room || '',
+      description: comment ? comment.text : '' // Добавляем комментарий
+    };
+  });
 };
 
 // Вычисляемые даты для предыдущего и следующего дня

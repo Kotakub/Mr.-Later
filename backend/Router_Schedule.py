@@ -37,6 +37,20 @@ async def get_attendances(lesson_id: int, db: AsyncSession):
     return attendances
 
 
+async def get_comments(db: AsyncSession, lesson_id: int):
+    comments = await get_comments_by_lesson(db, lesson_id)
+    comments_data = []
+    for comment in comments:
+        comments_data.append(
+            {
+                "lesson_id": comment.lesson_id,
+                "lesson_date": comment.lesson_date.isoformat(),
+                "text": comment.text,
+            }
+        )
+    return comments_data
+
+
 @router.get("/get_schedule/{user_login}")
 async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_session)):
     user = await get_user_by_login(db, user_login)
@@ -61,6 +75,9 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
     for lesson in lessons:
         dates = await get_dates(lesson.startDate, lesson.endDate, lesson.repeat)
         attendances = await get_attendances(lesson.id, db)
+        comments = await get_comments(db, lesson.id)
+
+        lessons_data["comments"].extend(comments)
         lessons_data[lesson.dayOfWeek].append(
             {
                 "id": lesson.id,
@@ -78,6 +95,7 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
                 "attendances": attendances,
             }
         )
+    print(lessons_data)
     return lessons_data
 
 
