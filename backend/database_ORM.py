@@ -40,7 +40,7 @@ async def get_lessons_by_user(db: AsyncSession, user_id: int):
 async def get_lessons_by_id(db: AsyncSession, lesson_id: int):
     try:
         result = await db.execute(select(Lessons).where(Lessons.id == lesson_id))
-        return result.scalars().all()
+        return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
         await db.rollback()
@@ -117,7 +117,7 @@ async def get_comments_by_lesson_and_date(
             .where(Comments.lesson_id == lesson_id)
             .where(Comments.lesson_date == lesson_date)
         )
-        return result.scalars().all()
+        return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
         await db.rollback()
@@ -170,6 +170,72 @@ async def delete_comment(db: AsyncSession, lesson_id: int, lesson_date) -> bool:
         )
         await db.commit()
 
+        return True
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def add_attendance_by_lesson_and_date(
+    db: AsyncSession, lesson_id: int, lesson_date: date  # Убедитесь, что тип date
+):
+    try:
+        new_attendance = Attendance(lesson_id=lesson_id, lesson_date=lesson_date)
+        db.add(new_attendance)
+        await db.commit()
+        await db.refresh(new_attendance)
+        return new_attendance
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def get_attendance_by_lesson_and_date(
+    db: AsyncSession, lesson_id: int, lesson_date: date  # Убедитесь, что тип date
+):
+    try:
+        result = await db.execute(
+            select(Attendance)
+            .where(Attendance.lesson_id == lesson_id)
+            .where(Attendance.lesson_date == lesson_date)
+        )
+        return result.scalar_one_or_none()
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+
+
+async def get_attendance_by_lesson(db: AsyncSession, lesson_id: int):
+    try:
+        result = await db.execute(
+            select(Attendance).where(Attendance.lesson_id == lesson_id)
+        )
+        return result.scalars().all()
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise e
+    return
+
+
+async def delete_attendance_by_lesson_and_date(
+    db: AsyncSession, lesson_id: int, lesson_date: date  # Убедитесь, что тип date
+):
+    try:
+        attendance = await get_attendance_by_lesson_and_date(db, lesson_id, lesson_date)
+
+        if not attendance:
+            return False
+
+        await db.execute(
+            delete(Attendance)
+            .where(Attendance.lesson_id == lesson_id)
+            .where(Attendance.lesson_date == lesson_date)
+        )
+        await db.commit()
         return True
 
     except SQLAlchemyError as e:

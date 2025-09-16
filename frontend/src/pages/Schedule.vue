@@ -51,7 +51,7 @@ const getCurrentUserFromToken = () => {
   try {
     const token = localStorage.getItem('auth_token');
     if (!token) {
-      throw new Error('No token found');
+      return null; // Возвращаем null вместо выброса ошибки
     }
 
     // Добавляем токен в заголовки axios по умолчанию
@@ -60,34 +60,34 @@ const getCurrentUserFromToken = () => {
     // Парсим payload из JWT токена
     const payload = JSON.parse(atob(token.split('.')[1]));
     
-    // В вашем токене в sub хранится email, но нам нужен login
-    // Будем получать информацию о пользователе через защищенный эндпоинт
     return {
       email: payload.sub,
-      // Временно используем email как login, пока не получим данные с сервера
       login: payload.sub.split('@')[0] 
     };
 
   } catch (err) {
     console.error('Error parsing token:', err);
     localStorage.removeItem('auth_token');
-    router.push('/auth');
     return null;
   }
 };
 
 // Функция для проверки, смотрим ли мы свое расписание
 const checkScheduleOwnership = () => {
-  
   const viewedLogin = route.params.login;
+  const currentUserLogin = currentUser.value?.login;
   
-  if (viewedLogin && currentUser.value) {
-    isViewingOwnSchedule.value = viewedLogin === currentUser.value.login;
-    saveButtonVisible.value = !isViewingOwnSchedule.value;
+  if (viewedLogin && currentUserLogin) {
+    isViewingOwnSchedule.value = viewedLogin === currentUserLogin;
+    saveButtonVisible.value = !isViewingOwnSchedule.value && checkAuth();
   } else {
-    isViewingOwnSchedule.value = true;
-    saveButtonVisible.value = false;
+    isViewingOwnSchedule.value = false;
+    saveButtonVisible.value = checkAuth() && viewedLogin !== currentUserLogin;
   }
+};
+
+const checkAuth = () => {
+  return !!localStorage.getItem('auth_token');
 };
 
 // Функция для сохранения чужого расписания
@@ -128,10 +128,8 @@ watch(() => router.currentRoute.value.params, () => {
 // Проверяем при монтировании и после загрузки пользователя
 onMounted(async () => {
   await getCurrentUserInfo();
-  if (currentUser.value) {
-    checkScheduleOwnership();
-    await loadSchedule();
-  }
+  checkScheduleOwnership();
+  await loadSchedule();
 });
 
 watch(currentUser, () => {
@@ -144,7 +142,10 @@ watch(currentUser, () => {
 const getCurrentUserInfo = async () => {
   try {
     const tokenUser = getCurrentUserFromToken();
-    if (!tokenUser) return;
+    if (!tokenUser) {
+      currentUser.value = null;
+      return;
+    }
 
     // Используем защищенный роут для получения информации о пользователе
     const response = await axios.get(`${API_BASE_URL}/protected`);
@@ -158,7 +159,7 @@ const getCurrentUserInfo = async () => {
     console.error('Error getting user info:', err);
     if (err.response?.status === 401) {
       localStorage.removeItem('auth_token');
-      router.push('/auth');
+      currentUser.value = null;
     }
   } finally {
     isLoadingUser.value = false;
@@ -181,51 +182,51 @@ const handleAttendanceToggle = async (attendanceData) => {
   try {
     const { lesson, date, attended } = attendanceData;
     
-    // Отправляем запрос на сервер для сохранения отметки посещения
-    const attendancePayload = {
-      lesson_id: lesson.lesson_id,
-      date: formatDateYMD(date)
-    };
-
-    await axios.post(`${API_BASE_URL}/attendance`, attendancePayload);
-    
-    // Обновляем локальное состояние если нужно
-    console.log(`Посещение отмечено: ${attended ? 'присутствовал' : 'отсутствовал'}`);
+    // Обновляем локальное состояние
+    const dateStr = formatDateYMD(date);
+    if (attended) {
+      if (!lesson.attendances) lesson.attendances = [];
+      if (!lesson.attendances.includes(dateStr)) {
+        lesson.attendances.push(dateStr);
+      }
+    } else {
+      if (lesson.attendances) {
+        lesson.attendances = lesson.attendances.filter(d => d !== dateStr);
+      }
+    }
     
   } catch (err) {
-    console.error('Error saving attendance:', err);
-    // Можно показать уведомление об ошибке
+    console.error('Error handling attendance toggle:', err);
   }
 };
 
 // Загрузка расписания
 const loadSchedule = async () => {
-  if (!currentUser.value) return;
-
   try {
     isLoading.value = true;
     error.value = null;
     const viewedLogin = route.params.login;
 
+    // Убираем авторизационный заголовок для GET запросов если нет токена
+    const config = {};
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers = { Authorization: `Bearer ${token}` };
+    }
+
     const response = await axios.get(
-      `${API_BASE_URL}/get_schedule/${viewedLogin}`
+      `${API_BASE_URL}/get_schedule/${viewedLogin}`,
+      config
     );
     
-    // Преобразуем объект в массив уроков
     if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
-      // Если это объект с днями недели, преобразуем в массив
       scheduleData.value = Object.values(response.data).flat();
     } else {
       scheduleData.value = response.data;
     }
     
   } catch (err) {
-    if (err.response?.status === 401) {
-      // Неавторизован - перенаправляем на страницу входа
-      localStorage.removeItem('auth_token');
-      router.push('/auth');
-    } else if (err.response?.status === 404) {
-      // У пользователя нет расписания - это нормально
+    if (err.response?.status === 404) {
       scheduleData.value = [];
     } else {
       error.value = 'Ошибка загрузки расписания';
@@ -236,13 +237,6 @@ const loadSchedule = async () => {
   }
 };
 
-// Загрузка при монтировании
-onMounted(async () => {
-  await getCurrentUserInfo();
-  if (currentUser.value) {
-    await loadSchedule();
-  }
-});
 
 watch(currentWeekStart, () => {
   if (currentUser.value) {
@@ -257,19 +251,21 @@ const getScheduleForDate = (date) => {
   const dateStr = formatDateYMD(date);
   
   return scheduleData.value.filter(lesson => {
-    // Проверяем, есть ли дата в массиве dates урока
     return lesson.dates && Array.isArray(lesson.dates) && lesson.dates.includes(dateStr);
   }).map(lesson => ({
-    lesson_id: lesson.id,
+    id: lesson.id,
     dates: lesson.dates,
+    attendances: lesson.attendances || [],
     subject_name: lesson.subject_name,
     teacher_name: lesson.teacher_name,
     start_time: formatTime(new Date('1970-01-01T' + lesson.startTime)),
     end_time: formatTime(new Date('1970-01-01T' + lesson.endTime)),
+    start_date: lesson.startDate,
+    end_date: lesson.endDate,
     repeat: lesson.repeat,
     dayOfWeek: lesson.dayOfWeek,
-    room: lesson.room || '', // Добавляем поле room
-    description: lesson.description || '' // Добавляем поле description
+    room: lesson.room || '',
+    description: lesson.description || ''
   }));
 };
 
@@ -302,10 +298,22 @@ const changeWeek = (weeks) => {
 
 // Открытие модального окна с деталями
 const openModal = (item, date) => {
+  if (!checkAuth()) {
+    alert('Для редактирования расписания необходимо войти в систему');
+    router.push('/authorization');
+    return;
+  }
+  
+  if (!isViewingOwnSchedule.value) {
+    alert('Вы можете редактировать только свое расписание');
+    return;
+  }
+  
   selectedItem.value = item;
   selectedDate.value = date;
   isModalOpen.value = true;
 };
+
 
 // Закрытие модального окна
 const closeModal = () => {
@@ -316,6 +324,17 @@ const closeModal = () => {
 
 // Открытие модального окна добавления
 const openAddLessonModal = (date) => {
+  if (!checkAuth()) {
+    alert('Для добавления занятий необходимо войти в систему');
+    router.push('/authorization');
+    return;
+  }
+  
+  if (!isViewingOwnSchedule.value) {
+    alert('Вы можете добавлять занятия только в свое расписание');
+    return;
+  }
+  
   addLessonDate.value = date;
   isAddModalOpen.value = true;
 };
@@ -337,10 +356,12 @@ const addNewLesson = async (lessonData) => {
       endDate: lessonData.end_date || formatDateYMD(addLessonDate.value),
       startTime: lessonData.start_time + ':00',
       endTime: lessonData.end_time + ':00',
-      repeat: lessonData.repeat || false,
+      repeat: lessonData.repeat || 'none',
       dayOfWeek: getDayName(addLessonDate.value),
       room: lessonData.room || ''
     };
+
+    console.log('Sending lesson data:', lessonPayload); // Для отладки
 
     await axios.post(`${API_BASE_URL}/add_lesson`, lessonPayload);
     await loadSchedule();
@@ -349,6 +370,7 @@ const addNewLesson = async (lessonData) => {
   } catch (err) {
     error.value = 'Ошибка добавления урока';
     console.error('Error adding lesson:', err);
+    console.error('Response data:', err.response?.data); // Для отладки
   }
 };
 
@@ -361,11 +383,12 @@ const updateLesson = async (updatedLesson) => {
       room: updatedLesson.room,
       startTime: updatedLesson.start_time + ':00',
       endTime: updatedLesson.end_time + ':00',
+      startDate: updatedLesson.start_date, // Добавьте это
+      endDate: updatedLesson.end_date,     // И это
       repeat: updatedLesson.repeat || 'none',
       dayOfWeek: updatedLesson.dayOfWeek
     };
 
-    // Убираем пустые поля
     Object.keys(lessonPayload).forEach(key => {
       if (lessonPayload[key] === undefined || lessonPayload[key] === null) {
         delete lessonPayload[key];
@@ -373,25 +396,25 @@ const updateLesson = async (updatedLesson) => {
     });
 
     await axios.put(
-      `${API_BASE_URL}/edit_lesson/${selectedItem.value.lesson_id}`,
+      `${API_BASE_URL}/edit_lesson/${selectedItem.value.id}`,
       lessonPayload
     );
     
     // Отправляем комментарий, если он не пустой
-    if (updatedLesson.comment && updatedLesson.comment.trim() !== '') {
+
+    
       try {
         const commentPayload = {
-          lesson_id: selectedItem.value.lesson_id,
-          date: formatDateYMD(selectedDate.value),
-          comment: updatedLesson.comment.trim()
+          lesson_id: selectedItem.value.id, // было lesson_id
+          lesson_date: formatDateYMD(selectedDate.value),
+          text: updatedLesson.description.trim()
         };
         
         await axios.put(`${API_BASE_URL}/edit_comment`, commentPayload);
       } catch (commentErr) {
-        console.warn('Comment update failed:', commentErr);
-        // Продолжаем даже если комментарий не сохранился
+        console.warn('Comment updаte failed:', commentErr);
       }
-    }
+    
     
     await loadSchedule();
     closeModal();
@@ -420,14 +443,13 @@ const deleteLesson = async () => {
 
 <template>
   <div class="schedule-app">
-    <!-- Добавляем навигационную панель -->
     <Navigation 
       :user="currentUser" 
       @logout="handleLogout" 
     />
     
     <div class="schedule-content">
-      <h1 class="title">Расписание занятий</h1>
+      <h1 class="title">Расписание занятий {{ route.params.login }}</h1>
       
       <!-- Индикатор загрузки -->
       <div v-if="isLoadingUser" class="loading">Загрузка информации о пользователе...</div>
@@ -436,7 +458,7 @@ const deleteLesson = async () => {
       <!-- Сообщение об ошибке -->
       <div v-if="error" class="error">{{ error }}</div>
       
-      <div v-if="currentUser && !isLoading">
+      <div v-if="!isLoading">
         <WeekNavigation
           :current-date="currentDate"
           :week-days="weekDays"
@@ -453,6 +475,7 @@ const deleteLesson = async () => {
             day-type="prev-day"
             :clickable="true"
             :show-add-button="false"
+            :show-attendance-button="false"
             @day-click="changeDay(-1)"
             @item-click="openModal($event, prevDate)"
           />
@@ -461,7 +484,8 @@ const deleteLesson = async () => {
             :title="formatDate(currentDate)"
             :items="getScheduleForDate(currentDate)"
             day-type="current-day"
-            :show-add-button="true"
+            :show-add-button="isViewingOwnSchedule"
+            :show-attendance-button="isViewingOwnSchedule"
             @item-click="openModal($event, currentDate)"
             @add-click="openAddLessonModal(currentDate)"
           />
@@ -472,11 +496,13 @@ const deleteLesson = async () => {
             day-type="next-day"
             :clickable="true"
             :show-add-button="false"
+            :show-attendance-button="false"
             @day-click="changeDay(1)"
             @item-click="openModal($event, nextDate)"
           />
         </div>
 
+        <!-- Модальные окна показываем только владельцу -->
         <LessonModal
           v-if="isModalOpen"
           :lesson="selectedItem"
@@ -493,17 +519,17 @@ const deleteLesson = async () => {
           @close="closeAddModal"
           @save="addNewLesson"
         />
-      </div>
+      </div> <!-- Закрывающий тег для v-if="!isLoading" -->
       
       <button 
         v-if="saveButtonVisible" 
         class="save-schedule-button"
         @click="saveOtherSchedule"
       >
-        Сохранить расписание
+        Сохранить это расписание
       </button>
-    </div>
-  </div>
+    </div> <!-- Закрывающий тег для .schedule-content -->
+  </div> <!-- Закрывающий тег для .schedule-app -->
 </template>
 
 <style scoped>
@@ -515,7 +541,7 @@ const deleteLesson = async () => {
 .schedule-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 100px 20px 30px; /* Увеличиваем верхний отступ для панели */
+  padding: 100px 20px 30px;
   box-sizing: border-box;
 }
 
@@ -577,7 +603,7 @@ const deleteLesson = async () => {
 
 @media (max-width: 768px) {
   .schedule-content {
-    padding: 90px 15px 20px; /* Адаптивный отступ */
+    padding: 90px 15px 20px;
   }
   
   .schedule-container {

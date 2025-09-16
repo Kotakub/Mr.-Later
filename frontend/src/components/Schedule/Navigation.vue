@@ -8,6 +8,7 @@
       >
         {{ user.login }}
       </button>
+      <span v-else class="app-title">Расписание занятий</span>
     </div>
     
     <div class="nav-right">
@@ -17,6 +18,13 @@
         @click="logout"
       >
         Выйти
+      </button>
+      <button 
+        v-else 
+        class="login-btn"
+        @click="goToLogin"
+      >
+        Войти
       </button>
     </div>
   </div>
@@ -39,6 +47,10 @@ const goToMySchedule = () => {
   if (props.user) {
     router.push(`/schedule/${props.user.login}`);
   }
+};
+
+const goToLogin = () => {
+  router.push('/authorization');
 };
 
 const logout = () => {
@@ -67,6 +79,13 @@ const logout = () => {
   align-items: center;
 }
 
+.app-title {
+  color: white;
+  font-family: "Chiron GoRound TC", sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+}
+
 .user-login-btn {
   background: rgba(255, 255, 255, 0.2);
   color: white;
@@ -80,6 +99,23 @@ const logout = () => {
 }
 
 .user-login-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.login-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: "Chiron GoRound TC", sans-serif;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.login-btn:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-2px);
 }
@@ -109,9 +145,14 @@ const logout = () => {
   }
   
   .user-login-btn,
-  .logout-btn {
+  .logout-btn,
+  .login-btn {
     padding: 6px 12px;
     font-size: 14px;
+  }
+  
+  .app-title {
+    font-size: 16px;
   }
 }
 </style>

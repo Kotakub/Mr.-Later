@@ -9,6 +9,34 @@ from models import Lessons
 router = APIRouter()
 
 
+async def get_dates(startDate, endDate, repeat):
+    dates = []
+    current_date = startDate
+    end_date = endDate
+
+    while current_date <= end_date:
+        dates.append(current_date.isoformat())
+        if repeat == "weekly":
+            current_date += timedelta(weeks=1)
+        elif repeat == "biweekly":
+            current_date += timedelta(weeks=2)
+        else:
+            break
+    return dates
+
+
+async def get_attendances(lesson_id: int, db: AsyncSession):
+    attendances = []
+    attendance_list = await get_attendance_by_lesson(db, lesson_id)
+    if not attendance_list:
+        return attendances
+
+    for att in attendance_list:
+        attendances.append(att.lesson_date.isoformat())
+
+    return attendances
+
+
 @router.get("/get_schedule/{user_login}")
 async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_session)):
     user = await get_user_by_login(db, user_login)
@@ -19,7 +47,6 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
 
     lessons = await get_lessons_by_user(db, user.id)
 
-    # Конвертируем объекты в словари для JSON сериализации
     lessons_data = {
         "monday": [],
         "tuesday": [],
@@ -30,26 +57,17 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
         "sunday": [],
         "comments": [],
     }
+
     for lesson in lessons:
-        dates = []
-        current_date = lesson.startDate
-        end_date = lesson.endDate
-
-        while current_date <= end_date:
-            dates.append(current_date.isoformat())
-            if lesson.repeat == "weekly":
-                current_date += timedelta(weeks=1)
-            elif lesson.repeat == "biweekly":
-                current_date += timedelta(weeks=2)
-            else:
-                break
-
+        dates = await get_dates(lesson.startDate, lesson.endDate, lesson.repeat)
+        attendances = await get_attendances(lesson.id, db)
         lessons_data[lesson.dayOfWeek].append(
             {
                 "id": lesson.id,
                 "user_id": lesson.user_id,
                 "teacher_name": lesson.teacher_name,
                 "subject_name": lesson.subject_name,
+                "room": lesson.room,
                 "startDate": lesson.startDate.isoformat(),
                 "endDate": lesson.endDate.isoformat(),
                 "startTime": lesson.startTime.isoformat(),
@@ -57,18 +75,9 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
                 "repeat": lesson.repeat,
                 "dayOfWeek": lesson.dayOfWeek,
                 "dates": dates,
+                "attendances": attendances,
             }
         )
-        comments = await get_comments_by_lesson(db, lesson.id)
-        for comment in comments:
-            lessons_data["comments"].append(
-                {
-                    "lesson_id": comment.lesson_id,
-                    "date": comment.lesson_date.isoformat(),
-                    "comment": comment.text,
-                }
-            )
-    print(lessons_data)
     return lessons_data
 
 
@@ -89,6 +98,7 @@ async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_ses
             "endTime",
             "repeat",
             "dayOfWeek",
+            "room",
         ]
 
         for field in required_fields:
@@ -116,6 +126,7 @@ async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_ses
             "endTime": time.fromisoformat(json_data["endTime"]),
             "repeat": json_data["repeat"],
             "dayOfWeek": json_data["dayOfWeek"],
+            "room": json_data["room"],
         }
 
         # Добавляем урок
@@ -133,6 +144,7 @@ async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_ses
             "endTime": new_lesson.endTime.isoformat(),
             "repeat": new_lesson.repeat,
             "dayOfWeek": new_lesson.dayOfWeek,
+            "room": new_lesson.room,
             "message": "Lesson created successfully",
         }
 
@@ -157,7 +169,7 @@ async def edit_lesson(
         json_data = await request.json()
 
         # Проверяем существование урока
-        lesson = get_lessons_by_id(db, lesson_id)
+        lesson = await get_lessons_by_id(db, lesson_id)
 
         if not lesson:
             raise HTTPException(
@@ -230,15 +242,20 @@ async def edit_comment(request: Request, db: AsyncSession = Depends(get_async_se
     try:
         # Получаем JSON из тела запроса
         comment_data = await request.json()
-        comment = get_comments_by_lesson_and_date(
+        comment_data["lesson_date"] = datetime.strptime(
+            comment_data["lesson_date"], "%Y-%m-%d"
+        ).date()
+        comment = await get_comments_by_lesson_and_date(
             db, comment_data["lesson_id"], comment_data["lesson_date"]
         )
         if not comment:
-            add_new_comment(db, comment_data)
-        elif comment_data["comment"]:
-            update_comment(db, comment_data)
+            await add_new_comment(db, comment_data)
+        elif comment_data["text"]:
+            await update_comment(db, comment_data)
         else:
-            delete_comment(db, comment_data["lesson_id"], comment_data["lesson_date"])
+            await delete_comment(
+                db, comment_data["lesson_id"], comment_data["lesson_date"]
+            )
 
     except ValueError as e:
         raise HTTPException(
@@ -267,5 +284,63 @@ async def delete_lesson(lesson_id: int, db: AsyncSession = Depends(get_async_ses
 
 
 @router.patch("/save_schedule")
-async def save_schedule(db: AsyncSession = Depends(get_async_session)):
+async def save_schedule(
+    request: Request, db: AsyncSession = Depends(get_async_session)
+):
+    try:
+        # Получаем JSON из тела запроса
+        save_data = await request.json()
+
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cant save schedule",
+        )
     return
+
+
+@router.post("/attendance")
+async def mark_attendance(
+    request: Request, db: AsyncSession = Depends(get_async_session)
+):
+    try:
+        # Получаем JSON из тела запроса
+        attendance_data = await request.json()
+
+        # Проверяем наличие обязательных полей
+        if "lesson_id" not in attendance_data or "lesson_date" not in attendance_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required fields: lesson_id or lesson_date",
+            )
+
+        # Преобразуем строку даты в объект date
+        try:
+            lesson_date = date.fromisoformat(attendance_data["lesson_date"])
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Use YYYY-MM-DD",
+            )
+
+        # Получаем attendance запись
+        attendance = await get_attendance_by_lesson_and_date(
+            db, attendance_data["lesson_id"], lesson_date
+        )
+
+        if attendance:
+            await delete_attendance_by_lesson_and_date(
+                db, attendance_data["lesson_id"], lesson_date
+            )
+            return {"attended": False}
+        else:
+            await add_attendance_by_lesson_and_date(
+                db, attendance_data["lesson_id"], lesson_date
+            )
+            return {"attended": True}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cant edit attendance: {str(e)}",
+        )

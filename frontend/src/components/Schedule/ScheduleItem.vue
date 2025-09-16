@@ -1,9 +1,11 @@
 <template>
   <div class="schedule-item" @click="$emit('item-click', item)">
-    <div class="time-badge" v-if="item.start_time && item.end_time">
-      {{ item.start_time }} - {{ item.end_time }}
+    <div class="header-row">
+      <div class="time-badge" v-if="item.start_time && item.end_time">
+        {{ item.start_time }} - {{ item.end_time }}
+      </div>
+      <div class="subject">{{ item.subject_name }}</div>
     </div>
-    <div class="subject">{{ item.subject_name }}</div>
     <div class="teacher">Преподаватель: {{ item.teacher_name }}</div>
     <div class="room">Аудитория: {{ item.room }}</div>
     
@@ -27,7 +29,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import axios from 'axios';
 
 const props = defineProps({
   item: {
@@ -52,51 +55,94 @@ const emit = defineEmits(['item-click', 'attendance-toggle']);
 
 const isLoading = ref(false);
 const isAttended = ref(false);
+const API_BASE_URL = 'http://localhost:8000';
 
-// Проверяем статус посещения при монтировании
-onMounted(() => {
-  checkAttendanceStatus();
-});
+// Форматируем дату для API
+const formatDateForAPI = (date) => {
+  return date.toISOString().split('T')[0];
+};
 
-// Функция для проверки статуса посещения
-const checkAttendanceStatus = async () => {
-  try {
-    // Здесь будет запрос к API для проверки статуса посещения
-    // Временно используем localStorage для демонстрации
-    const attendanceKey = `attendance_${props.item.lesson_id}_${props.currentDate.toISOString().split('T')[0]}`;
-    isAttended.value = localStorage.getItem(attendanceKey) === 'true';
-  } catch (error) {
-    console.error('Error checking attendance:', error);
+// Проверяем, отмечено ли посещение для текущей даты
+const checkAttendance = () => {
+  if (!props.item.attendances || !Array.isArray(props.item.attendances)) {
+    isAttended.value = false;
+    return;
   }
+  
+  const currentDateStr = formatDateForAPI(props.currentDate);
+  isAttended.value = props.item.attendances.includes(currentDateStr);
 };
 
 // Переключение статуса посещения
 const toggleAttendance = async () => {
   isLoading.value = true;
   try {
-    // Инвертируем текущее состояние
-    const newStatus = !isAttended.value;
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('Для отметки посещения необходимо войти в систему');
+      return;
+    }
+
+    const attendanceData = {
+      lesson_id: props.item.id, // Используем id вместо lesson_id
+      lesson_date: formatDateForAPI(props.currentDate)
+    };
+
+    const response = await axios.post(`${API_BASE_URL}/attendance`, attendanceData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Обновляем состояние на основе ответа сервера
+    isAttended.value = response.data.attended;
     
-    // Здесь будет запрос к API для сохранения статуса посещения
-    // Временно используем localStorage для демонстрации
-    const attendanceKey = `attendance_${props.item.lesson_id}_${props.currentDate.toISOString().split('T')[0]}`;
-    localStorage.setItem(attendanceKey, newStatus.toString());
-    
-    isAttended.value = newStatus;
+    // Обновляем локальный массив attendances
+    const currentDateStr = formatDateForAPI(props.currentDate);
+    if (response.data.attended) {
+      // Добавляем дату в attendances
+      if (!props.item.attendances) {
+        props.item.attendances = [];
+      }
+      if (!props.item.attendances.includes(currentDateStr)) {
+        props.item.attendances.push(currentDateStr);
+      }
+    } else {
+      // Удаляем дату из attendances
+      if (props.item.attendances) {
+        props.item.attendances = props.item.attendances.filter(date => date !== currentDateStr);
+      }
+    }
     
     // Отправляем событие родительскому компоненту
     emit('attendance-toggle', {
       lesson: props.item,
       date: props.currentDate,
-      attended: newStatus
+      attended: isAttended.value
     });
     
   } catch (error) {
     console.error('Error toggling attendance:', error);
+    if (error.response?.status === 401) {
+      alert('Необходима авторизация для отметки посещения');
+    } else {
+      alert('Ошибка при отметке посещения: ' + (error.response?.data?.detail || error.message));
+    }
   } finally {
     isLoading.value = false;
   }
 };
+
+// Следим за изменениями даты или элемента
+watch(() => [props.currentDate, props.item], () => {
+  checkAttendance();
+}, { immediate: true, deep: true });
+
+// Также проверяем статус при монтировании
+onMounted(() => {
+  checkAttendance();
+});
 </script>
 
 <style scoped>
@@ -125,16 +171,21 @@ const toggleAttendance = async () => {
   margin-bottom: 15px;
 }
 
+.header-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
 .time-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+  align-self: flex-end;
   background: #4a2d7c;
   color: white;
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
+  margin-bottom: 8px;
 }
 
 .subject {
@@ -142,7 +193,6 @@ const toggleAttendance = async () => {
   font-size: 17px;
   color: #4a2d7c;
   margin-bottom: 8px;
-  padding-right: 80px;
 }
 
 .teacher, .room {

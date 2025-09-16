@@ -145,7 +145,7 @@ const saveLesson = () => {
     room: newLesson.room,
     start_time: newLesson.start_time,
     end_time: newLesson.end_time,
-    end_date: newLesson.end_date, // Добавьте это
+    end_date: newLesson.end_date,
     repeat: newLesson.repeat,
     comment: newLesson.comment,
     dates: [formatDateYMD(props.date)]

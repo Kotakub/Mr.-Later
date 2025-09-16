@@ -39,6 +39,7 @@ class Lessons(Base):
 
     teacher_name: Mapped[str]
     subject_name: Mapped[str]
+    room: Mapped[str]
 
     startDate: Mapped[date] = mapped_column(Date, index=True)
     endDate: Mapped[date] = mapped_column(Date)

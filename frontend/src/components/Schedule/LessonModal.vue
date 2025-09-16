@@ -98,7 +98,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch, ref } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { formatDate, formatDateYMD } from '../../utils/dateUtils';
 
 const props = defineProps({
@@ -112,8 +112,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'delete', 'save']);
 
-const currentDate = ref(props.date ? new Date(props.date) : new Date());
-
 const editedLesson = reactive({
   subject_name: '',
   teacher_name: '',
@@ -123,7 +121,6 @@ const editedLesson = reactive({
   start_date: '',
   end_date: '',
   description: '',
-  new_comment: '',
   dayOfWeek: '',
   repeat: 'none'
 });
@@ -137,15 +134,15 @@ watch(() => props.lesson, (newLesson) => {
       room: newLesson.room || '',
       start_time: newLesson.start_time || '09:00',
       end_time: newLesson.end_time || '10:30',
-      start_date: newLesson.start_date || '',
-      end_date: newLesson.end_date || '',
+      start_date: newLesson.start_date || formatDateYMD(props.date),
+      end_date: newLesson.end_date || formatDateYMD(props.date),
       description: newLesson.description || '',
       dayOfWeek: newLesson.dayOfWeek || '',
       repeat: newLesson.repeat || 'none',
-      new_comment: '' // Сбрасываем комментарий при каждом открытии
+      description: ''
     });
     
-    // Если время в формате HH:MM:SS, обрезаем секунды
+    // Форматирование времени
     if (editedLesson.start_time && editedLesson.start_time.includes(':')) {
       editedLesson.start_time = editedLesson.start_time.substring(0, 5);
     }
@@ -190,7 +187,7 @@ const saveChanges = () => {
   // Создаем объект с данными для сохранения
   const saveData = {
     ...editedLesson,
-    comment: editedLesson.new_comment.trim() // Добавляем комментарий если он есть
+    comment: editedLesson.description.trim()
   };
   
   emit('save', saveData);
