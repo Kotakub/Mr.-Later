@@ -4,6 +4,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select
 from sqlalchemy import update, insert, delete
 from models import *
+import inspect
+
+
+def get_caller_name():
+    return inspect.currentframe().f_back.f_back.f_code.co_name
 
 
 # Асинхронные функции для работы с БД
@@ -13,6 +18,7 @@ async def get_user_by_email(db: AsyncSession, email: str):
         return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -23,6 +29,7 @@ async def get_user_by_login(db: AsyncSession, login: str):
         return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -33,6 +40,7 @@ async def get_lessons_by_user(db: AsyncSession, user_id: int):
         return result.scalars().all()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -43,6 +51,7 @@ async def get_lessons_by_id(db: AsyncSession, lesson_id: int):
         return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -56,6 +65,7 @@ async def add_new_lesson(db: AsyncSession, lesson_data: dict):
         return new_lesson
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -73,6 +83,7 @@ async def update_lesson(db: AsyncSession, lesson_data: dict):
         return
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -87,6 +98,7 @@ async def delete_lesson_by_id(db: AsyncSession, lesson_id: int) -> bool:
         return True
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -99,6 +111,7 @@ async def get_comments_by_lesson(db: AsyncSession, lesson_id: int):
         return result.scalars().all()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -115,6 +128,7 @@ async def get_comments_by_lesson_and_date(
         return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -128,6 +142,7 @@ async def add_new_comment(db: AsyncSession, comment_data: dict):
         return new_comment
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -146,6 +161,7 @@ async def update_comment(db: AsyncSession, comment_data: dict):
         return
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -168,6 +184,7 @@ async def delete_comment(db: AsyncSession, lesson_id: int, lesson_date) -> bool:
         return True
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -183,6 +200,7 @@ async def add_attendance_by_lesson_and_date(
         return new_attendance
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -199,6 +217,7 @@ async def get_attendance_by_lesson_and_date(
         return result.scalar_one_or_none()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
 
@@ -211,6 +230,7 @@ async def get_attendance_by_lesson(db: AsyncSession, lesson_id: int):
         return result.scalars().all()
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e
     return
@@ -234,5 +254,6 @@ async def delete_attendance_by_lesson_and_date(
         return True
 
     except SQLAlchemyError as e:
+        print(f"ОШИБКА В {get_caller_name()}")
         await db.rollback()
         raise e

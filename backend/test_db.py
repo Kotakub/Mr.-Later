@@ -1,27 +1,17 @@
-import asyncio
-from sqlalchemy import text
-from database_main import engine, session
-from config import settings
+import os
+from graphviz import Digraph
 
 
-async def add_room_column():
-    async with engine.begin() as conn:
-        # Проверяем, существует ли уже столбец room
-        result = await conn.execute(text("PRAGMA table_info(lessons)"))
-        columns = [row[1] for row in result]
-
-        if "room" not in columns:
-            # Добавляем новый столбец
-            await conn.execute(text("ALTER TABLE lessons ADD COLUMN room TEXT"))
-            print("Столбец 'room' успешно добавлен в таблицу 'lessons'")
-        else:
-            print("Столбец 'room' уже существует в таблице 'lessons'")
+def create_graph(path, graph):
+    for root, dirs, files in os.walk(path):
+        for dir in dirs:
+            graph.node(dir)
+            graph.edge(os.path.basename(root), dir)
+        for file in files:
+            graph.node(file, shape="box")
+            graph.edge(os.path.basename(root), file)
 
 
-async def main():
-    await add_room_column()
-    await engine.dispose()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+dot = Digraph(comment="Project Structure")
+create_graph("main", dot)
+dot.render("project_structure.png", view=True)

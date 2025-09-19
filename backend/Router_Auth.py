@@ -54,6 +54,7 @@ async def get_current_user_db(
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+        print("PAYLOAD", payload)
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -119,11 +120,13 @@ async def register(request: Request, db: AsyncSession = Depends(get_async_sessio
         }
 
     except HTTPException as he:
+        print("ОШИБКА РЕГИСТР")
         await db.rollback()
         raise he
     except Exception as e:
         import traceback
 
+        print("ОШИБКА РЕГИСТР")
         traceback.print_exc()
         await db.rollback()
         raise HTTPException(

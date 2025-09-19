@@ -4,6 +4,7 @@ from sqlalchemy import update, select
 from datetime import date, time, timedelta
 from database_ORM import *
 from database_main import get_async_session
+from Router_Auth import get_current_user_db
 from models import Lessons
 
 router = APIRouter()
@@ -100,10 +101,21 @@ async def get_schedule(user_login: str, db: AsyncSession = Depends(get_async_ses
 
 
 @router.post("/add_lesson")
-async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_session)):
+async def post_lesson(
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user_db),
+):
     try:
         # Получаем JSON из тела запроса
         json_data = await request.json()
+
+        # Проверяем, что пользователь добавляет урок себе
+        if json_data["user_login"] != current_user.login:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only add lessons to your own schedule",
+            )
 
         # Валидация обязательных полей
         required_fields = [
@@ -133,6 +145,8 @@ async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_ses
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
+        # TODO current.user
+
         # Преобразуем строки в date и time объекты
         lesson_data = {
             "user_id": user.id,
@@ -150,6 +164,7 @@ async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_ses
         # Добавляем урок
         new_lesson = await add_new_lesson(db, lesson_data)
 
+        # TODO убрать
         # Возвращаем созданный урок
         return {
             "id": new_lesson.id,
@@ -180,7 +195,10 @@ async def post_lesson(request: Request, db: AsyncSession = Depends(get_async_ses
 
 @router.put("/edit_lesson/{lesson_id}")
 async def edit_lesson(
-    lesson_id: int, request: Request, db: AsyncSession = Depends(get_async_session)
+    lesson_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user_db),
 ):
     try:
         # Получаем JSON из тела запроса
@@ -188,30 +206,83 @@ async def edit_lesson(
 
         # Проверяем существование урока
         lesson = await get_lessons_by_id(db, lesson_id)
-
         if not lesson:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found"
             )
 
+        if lesson.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only edit your own lessons",
+            )
+
+        repeat_types = ["weekly", "biweekly", "none"]
+        week = [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]
+
+        # for u in session.query(User).all():
+        #     print (u.__dict__)
         # Подготавливаем данные для обновления
         update_data = {}
         if "teacher_name" in json_data:
-            update_data["teacher_name"] = json_data["teacher_name"]
+            update_data["teacher_name"] = f'{json_data["teacher_name"]}'
         if "subject_name" in json_data:
-            update_data["subject_name"] = json_data["subject_name"]
+            update_data["subject_name"] = f'{json_data["subject_name"]}'
+
         if "startDate" in json_data:
-            update_data["startDate"] = date.fromisoformat(json_data["startDate"])
+            try:
+                tmp_date = date.fromisoformat(json_data["startDate"])
+                if tmp_date.year > 2300:
+                    tmp_date.year = 2300
+                update_data["startDate"] = tmp_date
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Incorrect startDate",
+                )
         if "endDate" in json_data:
-            update_data["endDate"] = date.fromisoformat(json_data["endDate"])
+            try:
+                tmp_date = date.fromisoformat(json_data["endDate"])
+                if tmp_date.year > 2300:
+                    tmp_date.year = 2300
+                update_data["endDate"] = tmp_date
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Incorrect startDate",
+                )
+
         if "startTime" in json_data:
-            update_data["startTime"] = time.fromisoformat(json_data["startTime"])
+            try:
+                update_data["startTime"] = time.fromisoformat(json_data["startTime"])
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Incorrect startTime",
+                )
         if "endTime" in json_data:
-            update_data["endTime"] = time.fromisoformat(json_data["endTime"])
+            try:
+                update_data["endTime"] = time.fromisoformat(json_data["endTime"])
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Incorrect endTime",
+                )
+
         if "repeat" in json_data:
-            update_data["repeat"] = json_data["repeat"]
+            if json_data["repeat"] in repeat_types:
+                update_data["repeat"] = f'{json_data["repeat"]}'
         if "dayOfWeek" in json_data:
-            update_data["dayOfWeek"] = json_data["dayOfWeek"]
+            if json_data["dayOfWeek"] in week:
+                update_data["dayOfWeek"] = f'{json_data["dayOfWeek"]}'
 
         if not update_data:
             raise HTTPException(
@@ -228,6 +299,7 @@ async def edit_lesson(
         result = await db.execute(select(Lessons).where(Lessons.id == lesson_id))
         updated_lesson = result.scalar_one()
 
+        # TODO убрать
         return {
             "id": updated_lesson.id,
             "user_id": updated_lesson.user_id,
@@ -248,6 +320,7 @@ async def edit_lesson(
             detail=f"Invalid date/time format: {str(e)}",
         )
     except Exception as e:
+        print("ОШИБКА ЭДИТ ЛЕССОН")
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -255,37 +328,27 @@ async def edit_lesson(
         )
 
 
-@router.put("/edit_comment")
-async def edit_comment(request: Request, db: AsyncSession = Depends(get_async_session)):
+@router.delete("/delete_lesson/{lesson_id}")
+async def delete_lesson(
+    lesson_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user_db),
+):
     try:
-        # Получаем JSON из тела запроса
-        comment_data = await request.json()
-        comment_data["lesson_date"] = datetime.strptime(
-            comment_data["lesson_date"], "%Y-%m-%d"
-        ).date()
-        comment = await get_comments_by_lesson_and_date(
-            db, comment_data["lesson_id"], comment_data["lesson_date"]
-        )
-        if not comment:
-            await add_new_comment(db, comment_data)
-        elif comment_data["text"]:
-            await update_comment(db, comment_data)
-        else:
-            await delete_comment(
-                db, comment_data["lesson_id"], comment_data["lesson_date"]
+        # Проверяем существование урока и принадлежность пользователю
+        lesson = await get_lessons_by_id(db, lesson_id)
+        if not lesson:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found"
             )
 
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cant edit comment",
-        )
-    return
+        if lesson.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete your own lessons",
+            )
 
-
-@router.delete("/delete_lesson/{lesson_id}")
-async def delete_lesson(lesson_id: int, db: AsyncSession = Depends(get_async_session)):
-    try:
+        # Удалаяем занятие
         success = await delete_lesson_by_id(db, lesson_id)
         if not success:
             raise HTTPException(
@@ -301,13 +364,70 @@ async def delete_lesson(lesson_id: int, db: AsyncSession = Depends(get_async_ses
         )
 
 
+@router.put("/edit_comment")
+async def edit_comment(
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user_db),
+):
+    try:
+        # Получаем JSON из тела запроса
+        comment_data = await request.json()
+
+        # Проверяем, что урок принадлежит пользователю
+        lesson = await get_lessons_by_id(db, comment_data["lesson_id"])
+        if not lesson or lesson.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only edit comments for your own lessons",
+            )
+
+        try:
+            tmp_date = datetime.strptime(comment_data["lesson_date"], "%Y-%m-%d").date()
+            if tmp_date.year > 2300:
+                tmp_date.year = 2300
+            comment_data["lesson_date"] = tmp_date
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Incorrect lesson_date",
+            )
+        comment = await get_comments_by_lesson_and_date(
+            db, comment_data["lesson_id"], comment_data["lesson_date"]
+        )
+        if not comment:
+            await add_new_comment(db, comment_data)
+        elif comment_data["text"]:
+            await update_comment(db, comment_data)
+        else:
+            await delete_comment(
+                db, comment_data["lesson_id"], comment_data["lesson_date"]
+            )
+    # TODO посмотреть
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cant edit comment",
+        )
+    return
+
+
 @router.patch("/save_schedule")
 async def save_schedule(
-    request: Request, db: AsyncSession = Depends(get_async_session)
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user_db),
 ):
     try:
         # Получаем JSON из тела запроса
         save_data = await request.json()
+
+        # Проверяем, что пользователь сохраняет расписание себе
+        if save_data["my_login"] != current_user.login:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only save schedule to your own account",
+            )
 
         user_me = await get_user_by_login(db, save_data["my_login"])
         user_save = await get_user_by_login(db, save_data["save_login"])
@@ -356,11 +476,21 @@ async def save_schedule(
 
 @router.post("/attendance")
 async def mark_attendance(
-    request: Request, db: AsyncSession = Depends(get_async_session)
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user_db),
 ):
     try:
         # Получаем JSON из тела запроса
         attendance_data = await request.json()
+
+        # Проверяем, что урок принадлежит пользователю
+        lesson = await get_lessons_by_id(db, attendance_data["lesson_id"])
+        if not lesson or lesson.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only mark attendance for your own lessons",
+            )
 
         # Проверяем наличие обязательных полей
         if "lesson_id" not in attendance_data or "lesson_date" not in attendance_data:

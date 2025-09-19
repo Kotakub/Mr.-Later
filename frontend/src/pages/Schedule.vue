@@ -311,7 +311,6 @@ const changeWeek = (weeks) => {
 const openModal = (item, date) => {
   if (!checkAuth()) {
     alert('Для редактирования расписания необходимо войти в систему');
-    router.push('/authorization');
     return;
   }
   
